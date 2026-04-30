@@ -6,3 +6,8 @@ eval/reports
 *.log
 .DS_Store
 supabase/.temp
+
+# Machine-generated eval artifacts: ignore everything under logs/ by default,
+# then carve out spike-latency JSON logs (finding-quality, committed).
+logs/*
+!logs/spike-latency/

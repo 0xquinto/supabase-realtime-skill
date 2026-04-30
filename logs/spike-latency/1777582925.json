@@ -1,0 +1,159 @@
+{
+  "timestamp": "2026-04-30T21:02:05.124Z",
+  "branchRef": "monljyrfmhyxknkrcyxb",
+  "n_trials": 20,
+  "threshold_p95_ms": 2000,
+  "trials": [
+    {
+      "n": 0,
+      "latency_ms": 77.73174999999901,
+      "insert_committed_ms": 186.8762089999982,
+      "event_received_ms": 264.6079589999972
+    },
+    {
+      "n": 1,
+      "latency_ms": 363.5405000000028,
+      "insert_committed_ms": 969.0092079999995,
+      "event_received_ms": 1332.5497080000023
+    },
+    {
+      "n": 2,
+      "latency_ms": 142.71041700000205,
+      "insert_committed_ms": 173.32775000000038,
+      "event_received_ms": 316.03816700000243
+    },
+    {
+      "n": 3,
+      "latency_ms": 154.04449999999997,
+      "insert_committed_ms": 166.5005420000016,
+      "event_received_ms": 320.54504200000156
+    },
+    {
+      "n": 4,
+      "latency_ms": 152.6921250000014,
+      "insert_committed_ms": 166.30054200000086,
+      "event_received_ms": 318.99266700000226
+    },
+    {
+      "n": 5,
+      "latency_ms": 153.28804200000013,
+      "insert_committed_ms": 166.0427920000002,
+      "event_received_ms": 319.3308340000003
+    },
+    {
+      "n": 6,
+      "latency_ms": 153.1156660000015,
+      "insert_committed_ms": 165.84470899999724,
+      "event_received_ms": 318.96037499999875
+    },
+    {
+      "n": 7,
+      "latency_ms": 154.06974999999875,
+      "insert_committed_ms": 169.0691250000018,
+      "event_received_ms": 323.13887500000055
+    },
+    {
+      "n": 8,
+      "latency_ms": 149.0102909999987,
+      "insert_committed_ms": 165.94070900000224,
+      "event_received_ms": 314.95100000000093
+    },
+    {
+      "n": 9,
+      "latency_ms": 420.29929099999936,
+      "insert_committed_ms": 166.82820899999933,
+      "event_received_ms": 587.1274999999987
+    },
+    {
+      "n": 10,
+      "latency_ms": 308.98220800000126,
+      "insert_committed_ms": 251.87608399999954,
+      "event_received_ms": 560.8582920000008
+    },
+    {
+      "n": 11,
+      "latency_ms": 776.1440829999992,
+      "insert_committed_ms": 180.19283300000097,
+      "event_received_ms": 956.3369160000002
+    },
+    {
+      "n": 12,
+      "latency_ms": 25.689959000003,
+      "insert_committed_ms": 166.69212499999776,
+      "event_received_ms": 192.38208400000076
+    },
+    {
+      "n": 13,
+      "latency_ms": 123.88529100000596,
+      "insert_committed_ms": 194.21512499999517,
+      "event_received_ms": 318.10041600000113
+    },
+    {
+      "n": 14,
+      "latency_ms": 116.92970899999636,
+      "insert_committed_ms": 200.74670800000604,
+      "event_received_ms": 317.6764170000024
+    },
+    {
+      "n": 15,
+      "latency_ms": 113.6384590000016,
+      "insert_committed_ms": 205.07474999999977,
+      "event_received_ms": 318.71320900000137
+    },
+    {
+      "n": 16,
+      "latency_ms": 108.43324999999459,
+      "insert_committed_ms": 208.203042000001,
+      "event_received_ms": 316.6362919999956
+    },
+    {
+      "n": 17,
+      "latency_ms": 140.89974999999686,
+      "insert_committed_ms": 216.7953750000015,
+      "event_received_ms": 357.69512499999837
+    },
+    {
+      "n": 18,
+      "latency_ms": 109.27162500000122,
+      "insert_committed_ms": 180.20274999999674,
+      "event_received_ms": 289.47437499999796
+    },
+    {
+      "n": 19,
+      "latency_ms": 88.44220900000073,
+      "insert_committed_ms": 228.48895800000173,
+      "event_received_ms": 316.93116700000246
+    }
+  ],
+  "latencies": [
+    77.73174999999901,
+    363.5405000000028,
+    142.71041700000205,
+    154.04449999999997,
+    152.6921250000014,
+    153.28804200000013,
+    153.1156660000015,
+    154.06974999999875,
+    149.0102909999987,
+    420.29929099999936,
+    308.98220800000126,
+    776.1440829999992,
+    25.689959000003,
+    123.88529100000596,
+    116.92970899999636,
+    113.6384590000016,
+    108.43324999999459,
+    140.89974999999686,
+    109.27162500000122,
+    88.44220900000073
+  ],
+  "timeouts": 0,
+  "p50": 145.86035400000037,
+  "p95": 438.0915305999996,
+  "p99": 708.5335725199988,
+  "passed": true,
+  "warmup": {
+    "delivered": false,
+    "latency_ms": null
+  }
+}

@@ -5,6 +5,7 @@
       "dist",
       "node_modules",
       "eval/reports",
+      "logs",
       "vendor",
       "supabase/functions",
       "supabase/.temp"
