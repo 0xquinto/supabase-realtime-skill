@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "registered_at": "2026-04-30",
+  "comment": "Pre-registered eval thresholds. Changes require versioned bump explained in PR body. See references/eval-methodology.md for rationale.",
+  "thresholds": {
+    "latency_p95_ms_max": 2000,
+    "missed_events_rate_max": 0.01,
+    "missed_events_ci_high_max": 0.01,
+    "spurious_trigger_rate_max": 0.02,
+    "spurious_trigger_ci_high_max": 0.03,
+    "action_correctness_rate_min": 0.9,
+    "action_correctness_ci_low_min": 0.85
+  },
+  "fixture_tiers": {
+    "ci-fast": { "n": 20, "trigger": "every PR" },
+    "ci-nightly": { "n": 100, "trigger": "daily on main" }
+  },
+  "statistical_design": {
+    "comparison": "paired (same fixture IDs, McNemar's test on binary metrics)",
+    "ci_method": "Wilson",
+    "ci_confidence": 0.95,
+    "rationale": "playbook/PLAYBOOK.md § 9 (in supabase-mcp-evals)"
+  }
+}
