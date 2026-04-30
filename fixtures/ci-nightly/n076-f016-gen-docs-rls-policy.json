@@ -1,0 +1,8 @@
+{
+  "id": "f016-gen-docs-rls-policy",
+  "ticket": {
+    "subject": "Where are the docs for writing an RLS policy that uses JWT custom claims?",
+    "body": "I want to write a policy that checks a custom claim like `request.jwt.claims->>'org_id'`. I see scattered examples on the blog but couldn't find a canonical doc page. Is there one? A pointer is fine."
+  },
+  "expected_routing": "general"
+}

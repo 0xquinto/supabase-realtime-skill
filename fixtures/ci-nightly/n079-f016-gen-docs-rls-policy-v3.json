@@ -1,0 +1,8 @@
+{
+  "id": "f016-gen-docs-rls-policy-v3",
+  "ticket": {
+    "subject": "How do I reference environment variables in a stored procedure?",
+    "body": "I'm trying to access environment variables from within a stored procedure I'm writing. I've seen some mentions in forum posts about using `current_setting()` but I can't find the official documentation page that explains this. Could you point me to the right docs or let me know if there's a recommended approach?"
+  },
+  "expected_routing": "general"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "f010-eng-query-perf-regression-v1",
+  "ticket": {
+    "subject": "Performance degradation in aggregate query after upgrading to Postgres 16",
+    "body": "We migrated from Postgres 15 to 16 two weeks ago. An aggregate query over a 120M-row events table that previously completed in 1.2s now consistently times out after 30s. EXPLAIN ANALYZE reveals the query planner is choosing a sequential scan with a hash aggregate instead of the B-tree index scan + sort strategy it used in 15. The table has a composite index on (user_id, timestamp) that should be optimal for this workload. Is there a known issue with cost model changes for aggregate operations in 16, or should we rebuild statistics?"
+  },
+  "expected_routing": "engineering"
+}

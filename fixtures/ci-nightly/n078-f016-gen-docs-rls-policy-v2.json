@@ -1,0 +1,8 @@
+{
+  "id": "f016-gen-docs-rls-policy-v2",
+  "ticket": {
+    "subject": "Documentation needed for implementing audit logging with Row Level Security",
+    "body": "I'm trying to set up audit logging that tracks which user accessed which rows through RLS policies. I've found some forum posts mentioning `request.jwt.claims` but I need a clear guide on how to log these access events systematically. Do you have a dedicated documentation page that covers this pattern? Even a link to the relevant section would be helpful."
+  },
+  "expected_routing": "general"
+}

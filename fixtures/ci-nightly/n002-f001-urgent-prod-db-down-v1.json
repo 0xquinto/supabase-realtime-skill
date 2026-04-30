@@ -1,0 +1,8 @@
+{
+  "id": "f001-urgent-prod-db-down-v1",
+  "ticket": {
+    "subject": "MySQL cluster down — critical payment processing failure",
+    "body": "Our main MySQL instance stopped accepting connections approximately 8 minutes ago. All transaction requests are timing out and customers cannot complete purchases — receiving gateway errors on checkout. We attempted switching to the standby node but it's not responding to queries from our application servers. Revenue impact is severe — immediate assistance needed."
+  },
+  "expected_routing": "urgent"
+}

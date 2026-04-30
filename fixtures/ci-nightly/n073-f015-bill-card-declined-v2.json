@@ -1,0 +1,8 @@
+{
+  "id": "f015-bill-card-declined-v2",
+  "ticket": {
+    "subject": "Payment method update — recurring charge not processing",
+    "body": "We received a notification that our March subscription renewal failed due to an invalid card on file. I've updated the payment information in my account settings, but the invoice from last week is still marked as unpaid. Will the system automatically retry the charge, or do I need to manually resubmit it? We need to ensure continuous service since our team depends on this."
+  },
+  "expected_routing": "billing"
+}

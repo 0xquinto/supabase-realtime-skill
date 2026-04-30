@@ -1,0 +1,8 @@
+{
+  "id": "f009-eng-migration-rls-policy",
+  "ticket": {
+    "subject": "Adding NOT NULL column to existing table — RLS policy breaks on backfill",
+    "body": "Trying to add a NOT NULL `tenant_id uuid` column to a 12M-row table with a backfill via `update ... set tenant_id = lookup(...)`. The update fails for ~3% of rows because our existing RLS policy on the table requires `auth.uid() = user_id`, but the migration runs as service_role. Should I temporarily disable the policy for the migration window, or is there a cleaner pattern for backfilling under RLS?"
+  },
+  "expected_routing": "engineering"
+}

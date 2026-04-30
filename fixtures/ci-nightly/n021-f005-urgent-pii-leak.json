@@ -1,0 +1,8 @@
+{
+  "id": "f005-urgent-pii-leak",
+  "ticket": {
+    "subject": "Cross-tenant PII visible in dashboard — RLS policy bypass",
+    "body": "A customer just reported they can see another tenant's user records (emails, addresses) in their admin dashboard. Looks like an RLS policy regression after our deploy this morning. We have an EU customer in the affected window so this is a GDPR-reportable incident on a 72-hour clock. Please help us identify the deploy and confirm the policy state."
+  },
+  "expected_routing": "urgent"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "f011-bill-unrecognized-charge-v2",
+  "ticket": {
+    "subject": "Incorrect charge of $349 applied - should be $79 Starter plan only",
+    "body": "I was billed $349 in March, but our account clearly shows the Starter tier at $79/month. The invoice lists unexpected charges: 'API requests overage $120', 'Premium support addon $80', and 'Data retention upgrade $70'. We haven't authorized any of these add-ons or upgrades. Can you explain why these appeared or process a refund for the overcharge?"
+  },
+  "expected_routing": "billing"
+}

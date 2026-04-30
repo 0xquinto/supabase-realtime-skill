@@ -1,0 +1,8 @@
+{
+  "id": "f012-bill-cancel-subscription-v2",
+  "ticket": {
+    "subject": "Request to downgrade from Enterprise to Free plan",
+    "body": "Our company is restructuring and we no longer need the Enterprise tier features. We'd like to switch to the Free plan, but we want to make sure we're only charged for the remainder of this month (through April 30). The downgrade option isn't visible in our account settings. Could you help us process this change and confirm the prorated billing?"
+  },
+  "expected_routing": "billing"
+}

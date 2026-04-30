@@ -1,0 +1,8 @@
+{
+  "id": "f007-eng-stripe-webhook-signature-v3",
+  "ticket": {
+    "subject": "PayPal IPN validation error in Lambda function environment",
+    "body": "Our PayPal IPN listener deployed on AWS Lambda consistently fails with 'Invalid transaction signature' for all incoming notifications. The identical webhook verification logic works fine when tested locally using Node.js. We're calling the PayPal SDK's verifyMessage() method with the raw POST payload. Could Lambda be transforming the request body before our handler accesses it — does it handle multipart form data differently than local environments?"
+  },
+  "expected_routing": "engineering"
+}

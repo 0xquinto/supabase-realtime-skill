@@ -1,0 +1,8 @@
+{
+  "id": "f015-bill-card-declined-v1",
+  "ticket": {
+    "subject": "Payment method expired — automatic renewal at risk",
+    "body": "Our company credit card was flagged as compromised by the bank and we had to cancel it. I've already added a new card to our account settings, but the system still shows our March subscription as unpaid. Will the pending charge process automatically with the updated payment info, or should I manually resubmit it? We can't afford any service interruptions right now."
+  },
+  "expected_routing": "billing"
+}

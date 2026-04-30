@@ -1,0 +1,8 @@
+{
+  "id": "f006-eng-sdk-types-missing-v1",
+  "ticket": {
+    "subject": "supabase-js v2.46 RealtimeChannel type definitions missing from exports",
+    "body": "We updated to @supabase/supabase-js@2.46.1 and now our TypeScript compilation breaks with 'Cannot find name RealtimeChannel'. The type was previously available from the main package export but appears to have been removed or relocated. The release notes don't document this change. We've reverted to 2.46.0 as a temporary workaround but need clarity on the correct import path or if this is a regression."
+  },
+  "expected_routing": "engineering"
+}

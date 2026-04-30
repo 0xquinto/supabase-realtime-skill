@@ -1,0 +1,8 @@
+{
+  "id": "f004-urgent-payment-failures-v2",
+  "ticket": {
+    "subject": "Database connection timeouts blocking all order submissions",
+    "body": "Since approximately 09:35 UTC, every attempt to submit an order is timing out at the database write stage. Our monitoring shows connection pool exhaustion on the primary database instance. The checkout flow completes successfully until the final order persistence step, then returns a 503 error. Currently experiencing complete transaction failure across all regions. Customer checkout abandonment is escalating rapidly and we're losing revenue in real-time."
+  },
+  "expected_routing": "urgent"
+}

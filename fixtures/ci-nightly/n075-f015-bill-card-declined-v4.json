@@ -1,0 +1,8 @@
+{
+  "id": "f015-bill-card-declined-v4",
+  "ticket": {
+    "subject": "Payment method update not reflecting on account",
+    "body": "I updated my payment method yesterday after receiving a notification that our subscription renewal couldn't process (insufficient funds on the card). The new card is now saved in my account settings, but our June invoice is still marked as unpaid. Should the system automatically retry the charge, or do I need to manually resubmit the payment? We're concerned about potential service interruption if this isn't resolved quickly."
+  },
+  "expected_routing": "billing"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "f006-eng-sdk-types-missing",
+  "ticket": {
+    "subject": "supabase-js v2.45 missing TypeScript types for RealtimePostgresChangesPayload",
+    "body": "After upgrading to @supabase/supabase-js@2.45.0 our TS build fails because RealtimePostgresChangesPayload is no longer exported from the entry index. Did the type move to a subpath? The changelog doesn't mention it. We're pinned to 2.44 as a workaround."
+  },
+  "expected_routing": "engineering"
+}

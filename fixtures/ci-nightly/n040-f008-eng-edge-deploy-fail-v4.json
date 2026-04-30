@@ -1,0 +1,8 @@
+{
+  "id": "f008-eng-edge-deploy-fail-v4",
+  "ticket": {
+    "subject": "supabase functions deploy fails: 'ENOENT' error for environment variable file",
+    "body": "Attempting to deploy an edge function that loads configuration from `../config/.env.local`. The deployment fails with 'ENOENT: no such file or directory' even though the file is present in the repository. The function runs without errors using `supabase functions serve` in development mode. Does the production bundler handle file paths differently than the local environment?"
+  },
+  "expected_routing": "engineering"
+}

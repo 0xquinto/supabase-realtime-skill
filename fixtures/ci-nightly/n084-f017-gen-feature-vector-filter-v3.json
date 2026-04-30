@@ -1,0 +1,8 @@
+{
+  "id": "f017-gen-feature-vector-filter-v3",
+  "ticket": {
+    "subject": "Feature request: Support for composite filtering in approximate nearest neighbor searches",
+    "body": "We're trying to implement a search feature that combines range filtering with ANN lookups, but we're hitting performance issues. Currently, when we add a timestamp range condition to our similarity search query, it seems to bypass our index and do a full table scan instead. Would it be possible to have better support for this use case in the query planner, or is there a recommended approach we should follow? We've heard about using generated columns with partial indexes but wanted to check if there are other solutions or if this is planned for a future release."
+  },
+  "expected_routing": "general"
+}

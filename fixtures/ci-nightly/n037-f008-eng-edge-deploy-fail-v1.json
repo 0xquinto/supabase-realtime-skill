@@ -1,0 +1,8 @@
+{
+  "id": "f008-eng-edge-deploy-fail-v1",
+  "ticket": {
+    "subject": "supabase functions deploy fails: 'Cannot resolve' on npm package import",
+    "body": "Attempting to deploy a function that imports a utility library from `@company/utils` package listed in package.json. The bundler throws 'Cannot resolve module' during deploy even though the package installs correctly and the function runs without issues in `supabase functions serve` locally. Does the deploy process have different dependency resolution rules than the local environment?"
+  },
+  "expected_routing": "engineering"
+}

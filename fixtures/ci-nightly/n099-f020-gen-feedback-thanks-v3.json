@@ -1,0 +1,8 @@
+{
+  "id": "f020-gen-feedback-thanks-v3",
+  "ticket": {
+    "subject": "Appreciate the solid foundation — Realtime broadcast streamlined our deployment",
+    "body": "We integrated Realtime broadcast into our event processing pipeline yesterday and the results exceeded expectations. Reduced our server footprint by roughly 40% and simplified our architecture considerably. Wanted to express our thanks — great work by your team on this feature."
+  },
+  "expected_routing": "general"
+}

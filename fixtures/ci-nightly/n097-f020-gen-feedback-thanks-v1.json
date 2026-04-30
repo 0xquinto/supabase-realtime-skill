@@ -1,0 +1,8 @@
+{
+  "id": "f020-gen-feedback-thanks-v1",
+  "ticket": {
+    "subject": "Appreciation for Streaming API — resolved our latency issues",
+    "body": "We integrated the Streaming API into our event processing pipeline yesterday and the results have been fantastic. Reduced our average response time by 40% and simplified our architecture significantly. Just wanted to express our gratitude to your team for building such a solid product."
+  },
+  "expected_routing": "general"
+}

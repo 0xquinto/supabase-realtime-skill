@@ -1,0 +1,8 @@
+{
+  "id": "f012-bill-cancel-subscription-v3",
+  "ticket": {
+    "subject": "Request to downgrade from Enterprise plan",
+    "body": "Our team has decided to scale back our usage and would like to switch from the Enterprise plan to the Standard plan. The next renewal is coming up on June 22nd. Could you help us make this change before the renewal date so we're not charged the full Enterprise rate? I haven't been able to locate a downgrade option in my account settings."
+  },
+  "expected_routing": "billing"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "f003-urgent-data-corruption-v2",
+  "ticket": {
+    "subject": "Critical: Users table lost 8,900 records following database upgrade at 23:45 UTC",
+    "body": "Our production users table experienced significant data loss during last night's upgrade procedure that started at 23:45 UTC. We're now missing 8,900 user records compared to our pre-upgrade backup from 23:15 UTC. This is causing login failures for affected accounts and we need immediate assistance. Can you verify if point-in-time recovery is enabled for our database cluster and if we can restore from the last 6 hours? This is a critical data-loss situation that requires urgent recovery before customer support tickets escalate. Please advise on next steps immediately."
+  },
+  "expected_routing": "urgent"
+}

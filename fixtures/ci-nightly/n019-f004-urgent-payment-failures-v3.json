@@ -1,0 +1,8 @@
+{
+  "id": "f004-urgent-payment-failures-v3",
+  "ticket": {
+    "subject": "Database connection timeouts blocking all order submissions",
+    "body": "Starting at approximately 09:45 UTC, customers are unable to complete order submissions. The system is timing out at the database write step when finalizing purchases. Our monitoring shows connection pool exhaustion on the primary instance. Currently no orders have been processed in the last 15 minutes. Sales are completely halted."
+  },
+  "expected_routing": "urgent"
+}

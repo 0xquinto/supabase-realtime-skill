@@ -1,0 +1,8 @@
+{
+  "id": "f016-gen-docs-rls-policy-v4",
+  "ticket": {
+    "subject": "How do I implement row-level security that validates against user metadata fields?",
+    "body": "I'm trying to create a security policy that references user metadata, specifically something like `auth.users.user_metadata->>'department'`. I found a few mentions in forum posts and tutorials, but I can't locate an official documentation page that covers this comprehensively. Could you point me to the right resource?"
+  },
+  "expected_routing": "general"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "f010-eng-query-perf-regression-v2",
+  "ticket": {
+    "subject": "Database performance degradation after upgrading to MySQL 8.0 from 5.7",
+    "body": "We migrated from MySQL 5.7 to 8.0 three days ago. A JOIN query on our orders table (120M rows) with a composite B-tree index is now executing in 3.8s p99 compared to 0.6s previously. EXPLAIN output indicates the query optimizer is choosing a full table scan instead of the index. Could this be related to histogram statistics or cost model changes in 8.0? Do we need to rebuild statistics manually?"
+  },
+  "expected_routing": "engineering"
+}

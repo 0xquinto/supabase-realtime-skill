@@ -1,0 +1,8 @@
+{
+  "id": "f014-bill-team-plan-upgrade-v1",
+  "ticket": {
+    "subject": "Downgrading from Enterprise to Pro — how are unused credits handled?",
+    "body": "We're scaling back from the Enterprise plan to Pro at the end of this month. We prepaid for the full year and have significant unused credits remaining. When we downgrade on day 18 of our current billing cycle, will we receive a refund for the unused portion? Also, will our team lose access to advanced features like audit logs immediately upon downgrade, or do we keep them until the end of the current billing period?"
+  },
+  "expected_routing": "billing"
+}

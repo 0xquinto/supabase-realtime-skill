@@ -1,0 +1,8 @@
+{
+  "id": "f011-bill-unrecognized-charge-v3",
+  "ticket": {
+    "subject": "Unexpected $349 charge on May invoice - plan should be $99 Business tier",
+    "body": "I'm seeing a $349 charge on my May statement, but our account dashboard shows we're subscribed to the Business plan at $99/month. The invoice breaks down as: 'API rate limit increase $120', 'Premium support tier $80', and 'Data export fee $50'. We haven't requested any of these upgrades or services. Can you explain these charges or process a refund for the overages?"
+  },
+  "expected_routing": "billing"
+}

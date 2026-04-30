@@ -1,0 +1,8 @@
+{
+  "id": "f020-gen-feedback-thanks",
+  "ticket": {
+    "subject": "Just wanted to say thanks — Realtime broadcast saved our weekend",
+    "body": "We rewired our multi-agent coordination layer to use Realtime broadcast last week and it just worked. Cut our infra surface area in half. No question, just gratitude — pass along to the team."
+  },
+  "expected_routing": "general"
+}

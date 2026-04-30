@@ -1,0 +1,8 @@
+{
+  "id": "f018-gen-onboarding-team-invite-v1",
+  "ticket": {
+    "subject": "Can I set up a team member with view-only permissions for reports?",
+    "body": "We recently onboarded and I'm attempting to add my colleague to access our analytics reports without giving him editing capabilities. When I go through the invitation process, I only see 'Admin' and 'Editor' as available options. Is there a read-only or viewer permission level that I'm not finding in the settings?"
+  },
+  "expected_routing": "general"
+}

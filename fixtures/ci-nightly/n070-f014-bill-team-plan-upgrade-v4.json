@@ -1,0 +1,8 @@
+{
+  "id": "f014-bill-team-plan-upgrade-v4",
+  "ticket": {
+    "subject": "Question about downgrading from Enterprise to Business plan — billing timeline",
+    "body": "We're looking to downgrade our Enterprise subscription to the Business plan. We're currently 8 days into our monthly billing cycle. Will you credit us for the unused Enterprise days, or do we lose those charges when we switch? Also, I need to understand when the downgrade becomes active — do we lose Enterprise features like advanced reporting immediately, or do we keep access through the end of the current billing period?"
+  },
+  "expected_routing": "billing"
+}

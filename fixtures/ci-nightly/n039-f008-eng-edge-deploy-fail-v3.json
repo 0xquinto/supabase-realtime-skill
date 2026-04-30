@@ -1,0 +1,8 @@
+{
+  "id": "f008-eng-edge-deploy-fail-v3",
+  "ticket": {
+    "subject": "supabase functions deploy fails: 'Cannot resolve module' on monorepo dependency",
+    "body": "Attempting to deploy an edge function that imports utilities from `../utils/helpers.ts`. Getting 'Cannot resolve module' error during deployment, but the import works perfectly with `supabase functions serve` in local development. The file path is correct and accessible. Does the production bundler have different module resolution rules than the local dev server?"
+  },
+  "expected_routing": "engineering"
+}

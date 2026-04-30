@@ -1,0 +1,8 @@
+{
+  "id": "f005-urgent-pii-leak-v3",
+  "ticket": {
+    "subject": "Data isolation breach — unauthorized access to customer financial records across accounts",
+    "body": "We've discovered that users from Account B can query and retrieve Account A's transaction history and banking details through the reporting API. This appears to have started after yesterday's authentication layer update. One of the affected customers is based in California, which triggers CCPA notification requirements within 30 days. We need immediate assistance determining which code changes introduced this isolation failure and validating that row-level access controls are properly enforced."
+  },
+  "expected_routing": "urgent"
+}

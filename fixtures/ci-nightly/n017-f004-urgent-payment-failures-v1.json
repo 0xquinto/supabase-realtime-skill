@@ -1,0 +1,8 @@
+{
+  "id": "f004-urgent-payment-failures-v1",
+  "ticket": {
+    "subject": "Database connection pool exhausted - API endpoints timing out",
+    "body": "Starting at approximately 09:45 UTC, our API is returning 503 errors on all POST requests to the /api/orders endpoint. Database connection monitoring shows the pool has been at maximum capacity for the last 15 minutes with no recovery. Customer-facing order creation is completely blocked. We're losing transaction volume every minute this persists."
+  },
+  "expected_routing": "urgent"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "f019-gen-account-sso-redirect-v2",
+  "ticket": {
+    "subject": "SAML authentication succeeds but application fails to load after redirect",
+    "body": "I'm able to complete the SAML authentication flow through our identity provider without any errors, but after the redirect I'm presented with a completely blank page. The dashboard content never loads. If I refresh the page, I'm sent back to the login screen. This began yesterday morning. Two other team members are experiencing the identical behavior. I've tested this across Safari and Edge browsers with no change."
+  },
+  "expected_routing": "general"
+}

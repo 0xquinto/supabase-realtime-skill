@@ -1,0 +1,8 @@
+{
+  "id": "f017-gen-feature-vector-filter-v1",
+  "ticket": {
+    "subject": "Feature request: Support for post-filter optimization in vector similarity searches",
+    "body": "Currently, when I apply a LIMIT clause after a vector similarity search with ORDER BY distance, the query executor retrieves all vectors before applying the limit, which is inefficient for large datasets. It would be great if there was a way to push the limit down into the index traversal itself, or an official best practice for this pattern. Is there any plan to optimize this, or should we be using a different approach like materialized views or custom scoring functions?"
+  },
+  "expected_routing": "general"
+}

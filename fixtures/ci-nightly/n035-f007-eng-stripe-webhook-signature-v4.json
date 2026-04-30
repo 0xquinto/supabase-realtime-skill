@@ -1,0 +1,8 @@
+{
+  "id": "f007-eng-stripe-webhook-signature-v4",
+  "ticket": {
+    "subject": "PayPal IPN validation returns 401 in Lambda environment",
+    "body": "Our PayPal Instant Payment Notification handler deployed to AWS Lambda consistently fails verification with 'Invalid transaction signature'. The identical handler runs correctly in local testing and on EC2. We're calling the PayPal API with the raw POST data to verify the transaction. The issue appears related to how Lambda processes the request stream — is there a difference in how Lambda buffers incoming payloads compared to standard servers?"
+  },
+  "expected_routing": "engineering"
+}

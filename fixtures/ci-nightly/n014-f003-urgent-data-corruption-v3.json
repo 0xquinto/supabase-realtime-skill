@@ -1,0 +1,8 @@
+{
+  "id": "f003-urgent-data-corruption-v3",
+  "ticket": {
+    "subject": "Critical: 8,500 customer records vanished from users table post-deployment",
+    "body": "Following our production deployment at 14:45 UTC, the users table is missing 8,512 records compared to our pre-deployment backup from 14:15. Point-in-time recovery needs to be enabled immediately on our database cluster so we can restore to the 14:15 checkpoint. We have active sessions and account lockouts happening now because customer profiles are gone. This is a production data loss emergency, not a performance issue."
+  },
+  "expected_routing": "urgent"
+}

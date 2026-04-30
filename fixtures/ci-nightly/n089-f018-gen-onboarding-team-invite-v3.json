@@ -1,0 +1,8 @@
+{
+  "id": "f018-gen-onboarding-team-invite-v3",
+  "ticket": {
+    "subject": "Can I set up a team member with view-only permissions for reports?",
+    "body": "We recently created an organization account and want to bring our analyst on board to access reports without giving them editing capabilities. When I go through the team member addition process, I only see 'Admin' and 'Editor' role options available. Is there a read-only or viewer permission level that I'm not seeing in the interface?"
+  },
+  "expected_routing": "general"
+}

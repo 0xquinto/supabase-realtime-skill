@@ -1,0 +1,8 @@
+{
+  "id": "f001-urgent-prod-db-down-v4",
+  "ticket": {
+    "subject": "Critical: Redis cache cluster down — all sessions lost",
+    "body": "Our main Redis instance stopped responding approximately 8 minutes ago. Every user session is timing out and checkout flows are completely blocked. We attempted to restart the service but it won't come back online. The backup Redis node is also not accepting connections from our application servers. We're currently losing ~$50k per minute in transaction volume — this requires immediate escalation to infrastructure team."
+  },
+  "expected_routing": "urgent"
+}

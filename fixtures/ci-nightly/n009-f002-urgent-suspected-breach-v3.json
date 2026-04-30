@@ -1,0 +1,8 @@
+{
+  "id": "f002-urgent-suspected-breach-v3",
+  "ticket": {
+    "subject": "CRITICAL: Database credentials exposed in Docker image layer",
+    "body": "Our DevOps team discovered production database credentials hardcoded in a Docker image that was pushed to our public Docker Hub registry 2 hours ago. The image has been deleted but may have been pulled by unknown parties. We require immediate credential rotation, a list of all image pulls during the exposure window, and an urgent audit of database access logs. This is being treated as a potential active compromise."
+  },
+  "expected_routing": "urgent"
+}

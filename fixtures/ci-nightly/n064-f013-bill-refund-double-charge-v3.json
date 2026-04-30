@@ -1,0 +1,8 @@
+{
+  "id": "f013-bill-refund-double-charge-v3",
+  "ticket": {
+    "subject": "Double charge on May subscription — urgent refund needed",
+    "body": "I've noticed two separate $149 charges posted to my account on May 15th, both from Supabase. The transaction IDs are -4k2c and -4k2d. My billing dashboard only displays a single May invoice, but I was charged twice. I need this duplicate charge reversed immediately."
+  },
+  "expected_routing": "billing"
+}

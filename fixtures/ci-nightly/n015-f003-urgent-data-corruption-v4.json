@@ -1,0 +1,8 @@
+{
+  "id": "f003-urgent-data-corruption-v4",
+  "ticket": {
+    "subject": "Critical: Customers table corrupted after schema upgrade, 8,500+ records inaccessible",
+    "body": "Our schema upgrade completed at 14:45 UTC and the customers table is now returning corruption errors on approximately 8,500 records. Queries are timing out and we're seeing integrity constraint violations. Can you confirm if point-in-time recovery is available for the past 6 hours on our project? We need to restore from backup immediately before our support team gets flooded with failed login reports. This is a data integrity emergency."
+  },
+  "expected_routing": "urgent"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "f001-urgent-prod-db-down-v3",
+  "ticket": {
+    "subject": "Critical: Redis cache cluster down — all sessions lost",
+    "body": "Our main Redis instance went offline approximately 8 minutes ago. Session storage is completely unavailable, forcing all users to re-authenticate. The shopping cart feature is broken and checkout pages are timing out. We attempted to connect to the backup node but it's also unreachable from our application servers. This is causing immediate revenue impact — urgent escalation needed."
+  },
+  "expected_routing": "urgent"
+}

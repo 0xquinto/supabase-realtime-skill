@@ -1,0 +1,8 @@
+{
+  "id": "f013-bill-refund-double-charge-v1",
+  "ticket": {
+    "subject": "Double billing on March statement — requesting credit",
+    "body": "I've noticed two separate charges of $149 each appearing on my credit card for March, both dated Mar 15. The transaction IDs are -4k2c and -4k2d. My account dashboard only displays a single March invoice. Could you please investigate and issue a refund for the duplicate charge?"
+  },
+  "expected_routing": "billing"
+}

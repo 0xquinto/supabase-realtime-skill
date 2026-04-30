@@ -1,0 +1,8 @@
+{
+  "id": "f003-urgent-data-corruption-v1",
+  "ticket": {
+    "subject": "Critical: Customer profiles table lost 8,500+ records following database upgrade",
+    "body": "Our database upgrade completed at 15:45 UTC yesterday and we've discovered that the customer_profiles table is now missing 8,534 records compared to our pre-upgrade backup from 15:20. Point-in-time recovery needs to be enabled and accessible for at least the last 24 hours on our account. We urgently need to restore these lost customer records before our support team processes refunds for accounts customers can no longer access. This is a production data loss emergency."
+  },
+  "expected_routing": "urgent"
+}

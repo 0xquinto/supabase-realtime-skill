@@ -1,0 +1,8 @@
+{
+  "id": "f011-bill-unrecognized-charge-v4",
+  "ticket": {
+    "subject": "Overcharged $350 in May - billed for Enterprise features on Starter plan",
+    "body": "Our May statement charged us $449, but we're subscribed to the Starter plan at $99/month. I see unexpected charges: 'Premium support package $150', 'Advanced analytics module $120', and 'API rate limit increase $80'. We never requested these add-ons and our account settings show no upgrades. Please explain these line items or process a refund for the $350 difference."
+  },
+  "expected_routing": "billing"
+}

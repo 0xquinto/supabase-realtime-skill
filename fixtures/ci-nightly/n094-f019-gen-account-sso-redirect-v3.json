@@ -1,0 +1,8 @@
+{
+  "id": "f019-gen-account-sso-redirect-v3",
+  "ticket": {
+    "subject": "Azure AD SSO causing infinite redirect loop after authentication",
+    "body": "I'm experiencing an issue with Azure AD single sign-on where authentication completes on the Azure side, but then the application enters an infinite redirect loop instead of loading the dashboard. This began yesterday afternoon. Two other team members reported the same problem. I've tested in Safari and Edge browsers with no success. Clearing browser cache didn't resolve it."
+  },
+  "expected_routing": "general"
+}

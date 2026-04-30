@@ -1,0 +1,8 @@
+{
+  "id": "f017-gen-feature-vector-filter-v2",
+  "ticket": {
+    "subject": "Feature request: Support for post-index filtering in B-tree range queries without full table scans",
+    "body": "Currently when I combine a LIMIT clause with a B-tree index range query on a large table, the query planner seems to evaluate the entire index range before applying the limit, rather than stopping early once the limit is reached. It would be helpful to have a documented best practice (or perhaps a query hint system) that ensures post-index filters can be applied efficiently without materializing all intermediate results. Is this optimization something being considered for future releases, or should we be using materialized views or result set pagination as a workaround?"
+  },
+  "expected_routing": "general"
+}

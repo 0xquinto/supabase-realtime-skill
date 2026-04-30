@@ -1,0 +1,8 @@
+{
+  "id": "f020-gen-feedback-thanks-v4",
+  "ticket": {
+    "subject": "Appreciation for Batch Processing improvements — resolved our data pipeline issues",
+    "body": "We migrated our distributed logging system to use your Batch Processing feature last month and the results have been outstanding. Reduced our database load by 60% and eliminated the bottlenecks we were experiencing. Really impressed with how seamlessly it integrated with our existing stack. Thanks to your team for building such solid infrastructure."
+  },
+  "expected_routing": "general"
+}

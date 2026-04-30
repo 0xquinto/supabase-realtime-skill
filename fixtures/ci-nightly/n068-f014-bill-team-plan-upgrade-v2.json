@@ -1,0 +1,8 @@
+{
+  "id": "f014-bill-team-plan-upgrade-v2",
+  "ticket": {
+    "subject": "Team plan upgrade timing — prorating and feature activation questions",
+    "body": "We're interested in switching from the Pro plan to Team. Our current billing cycle started 8 days ago. If we upgrade now, will the unused Pro days be credited toward the Team plan cost, or do we get charged the full Team price with the Pro subscription ending at the regular cycle date? Additionally, when do the Team-tier features (like advanced audit logs) become available — right when we upgrade, or at the next billing cycle?"
+  },
+  "expected_routing": "billing"
+}

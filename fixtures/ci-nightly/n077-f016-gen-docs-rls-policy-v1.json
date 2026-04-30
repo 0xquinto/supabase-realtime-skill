@@ -1,0 +1,8 @@
+{
+  "id": "f016-gen-docs-rls-policy-v1",
+  "ticket": {
+    "subject": "How do I implement role-based access control using JWT tokens in policies?",
+    "body": "I'm trying to set up a policy that validates user roles from a JWT token claim like `request.jwt.claims->>'user_role'`. I found some examples in tutorials but I'm looking for official documentation that covers the full process. Can you point me to the relevant docs or guide?"
+  },
+  "expected_routing": "general"
+}

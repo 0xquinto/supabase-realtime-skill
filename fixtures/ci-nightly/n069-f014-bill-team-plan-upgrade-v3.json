@@ -1,0 +1,8 @@
+{
+  "id": "f014-bill-team-plan-upgrade-v3",
+  "ticket": {
+    "subject": "Question about downgrading from Enterprise to Pro — billing cycle impact?",
+    "body": "We're looking to downgrade our Enterprise subscription to the Pro plan. Since we're currently 18 days into our monthly billing cycle, how does the credit work? Will you apply a prorated refund for the unused Enterprise days toward the Pro plan, or does the new pricing only apply at the next renewal date? Also, when would we lose access to Enterprise features like advanced audit logs and priority support — immediately or at the end of the current cycle?"
+  },
+  "expected_routing": "billing"
+}

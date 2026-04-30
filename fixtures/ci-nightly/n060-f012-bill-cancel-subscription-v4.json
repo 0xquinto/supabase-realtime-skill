@@ -1,0 +1,8 @@
+{
+  "id": "f012-bill-cancel-subscription-v4",
+  "ticket": {
+    "subject": "Request to downgrade from Enterprise plan",
+    "body": "Our company is restructuring and we need to reduce our service tier. We'd like to downgrade from the Enterprise plan to the Basic plan before our renewal date on June 30. The downgrade option isn't available in our account settings. Can you help us process this change and ensure we're only charged for the Basic tier going forward?"
+  },
+  "expected_routing": "billing"
+}

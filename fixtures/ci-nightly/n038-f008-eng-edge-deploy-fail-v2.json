@@ -1,0 +1,8 @@
+{
+  "id": "f008-eng-edge-deploy-fail-v2",
+  "ticket": {
+    "subject": "supabase functions deploy fails: 'Cannot resolve' error on local file import",
+    "body": "Attempting to deploy an edge function that references a utility file via `../utils/helpers.ts`. The deployment bundler throws 'Cannot resolve module' even though the path is correct and the file is present. The function runs without issues using `supabase functions serve` on my local machine. Does the production bundler have different module resolution rules?"
+  },
+  "expected_routing": "engineering"
+}

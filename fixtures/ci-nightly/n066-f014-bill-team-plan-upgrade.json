@@ -1,0 +1,8 @@
+{
+  "id": "f014-bill-team-plan-upgrade",
+  "ticket": {
+    "subject": "Upgrading from Pro to Team — when does the new pricing kick in?",
+    "body": "Our team is moving from Pro to the Team plan. If I upgrade mid-cycle (we're on day 12 of the current Pro period), do you prorate the remaining Pro days against the Team price, or does the Team subscription just start fresh on next billing date? Also — does the upgrade take effect immediately for org-level features like SSO?"
+  },
+  "expected_routing": "billing"
+}

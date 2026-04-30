@@ -1,0 +1,8 @@
+{
+  "id": "f009-eng-migration-rls-policy-v4",
+  "ticket": {
+    "subject": "Migrating existing JSON column to JSONB — RLS policy blocks service_role updates",
+    "body": "We're converting a `metadata json` column to `metadata jsonb` on a 45M-row table using `alter column ... using metadata::jsonb`. The migration is failing partway through because our RLS policy enforces `(select auth.uid()) = owner_id`, but the schema migration runs under service_role. About 2% of rows are causing the process to abort. Would disabling the policy temporarily be the right move, or is there a better pattern for performing schema changes on RLS-protected tables without triggering policy violations?"
+  },
+  "expected_routing": "engineering"
+}

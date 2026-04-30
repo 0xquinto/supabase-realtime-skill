@@ -1,0 +1,8 @@
+{
+  "id": "f005-urgent-pii-leak-v1",
+  "ticket": {
+    "subject": "Customer account data exposed across organization boundary — access control failure",
+    "body": "We've discovered that users from one organization can query and retrieve employee records (names, phone numbers, SSNs) belonging to a different organization through the API. The issue surfaced after yesterday's authentication service update. One affected org operates in California so we're subject to CCPA notification requirements within 30 days. Need immediate verification of the access control layer and which deployments introduced this vulnerability."
+  },
+  "expected_routing": "urgent"
+}

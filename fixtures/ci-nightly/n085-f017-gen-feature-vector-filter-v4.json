@@ -1,0 +1,8 @@
+{
+  "id": "f017-gen-feature-vector-filter-v4",
+  "ticket": {
+    "subject": "Feature request: Support for composite indexes combining full-text search with BM25 ranking",
+    "body": "Currently, when I try to combine a full-text search query with a BM25 relevance ranking filter, the query planner doesn't utilize the existing full-text index and instead performs a table scan on the results. It would be really helpful to have a recommended approach (or configuration option) that allows full-text search with BM25 ranking to work efficiently without sacrificing performance. Is this something planned for a future release, or should we be creating materialized views with pre-computed scores as a workaround?"
+  },
+  "expected_routing": "general"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "f006-eng-sdk-types-missing-v4",
+  "ticket": {
+    "subject": "supabase-js v2.46 AuthSession type definition missing from exports",
+    "body": "We upgraded to @supabase/supabase-js@2.46.1 and our TypeScript compilation now errors because AuthSession is not exported from the main index file. We checked the migration guide but there's no mention of this type being relocated or renamed. Currently working around this by staying on v2.45, but we need to upgrade for security patches."
+  },
+  "expected_routing": "engineering"
+}

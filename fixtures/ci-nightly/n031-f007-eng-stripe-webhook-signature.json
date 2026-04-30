@@ -1,0 +1,8 @@
+{
+  "id": "f007-eng-stripe-webhook-signature",
+  "ticket": {
+    "subject": "Stripe webhook signature verification fails inside Edge Function",
+    "body": "Our Stripe webhook handler in an Edge Function rejects every event with 'No signatures found matching expected signature'. Same code works locally with Deno deploy. We're using stripe.webhooks.constructEvent with the raw body. Suspecting the request body is being parsed before we read it — does Edge Functions buffer differently?"
+  },
+  "expected_routing": "engineering"
+}

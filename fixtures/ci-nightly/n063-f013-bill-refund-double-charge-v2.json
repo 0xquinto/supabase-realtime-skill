@@ -1,0 +1,8 @@
+{
+  "id": "f013-bill-refund-double-charge-v2",
+  "ticket": {
+    "subject": "Double billing on March statement — requesting credit",
+    "body": "I noticed two separate $149 charges from Supabase posted to my account on Mar 15th. Both transactions appear on my statement with order IDs -4c2e and -4c2f, but my billing dashboard only displays a single March invoice. Can you please investigate and process a refund for the duplicate transaction?"
+  },
+  "expected_routing": "billing"
+}

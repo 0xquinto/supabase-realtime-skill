@@ -1,0 +1,8 @@
+{
+  "id": "f009-eng-migration-rls-policy-v3",
+  "ticket": {
+    "subject": "Adding UNIQUE constraint to large table — RLS policy prevents constraint validation",
+    "body": "We're adding a UNIQUE constraint on `email` to a 8M-row existing table, and the migration is failing during the validation phase. Our RLS policy enforces `tenant_id = auth.user_id`, but the constraint check runs as service_role without row visibility. About 2% of rows are causing uniqueness violations that we can't identify through the RLS context. Is disabling RLS temporarily the standard approach, or should we validate and fix conflicts before applying the constraint?"
+  },
+  "expected_routing": "engineering"
+}

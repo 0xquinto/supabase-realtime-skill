@@ -1,0 +1,8 @@
+{
+  "id": "f007-eng-stripe-webhook-signature-v2",
+  "ticket": {
+    "subject": "PayPal IPN validation error in CloudFlare Worker",
+    "body": "Our PayPal IPN listener deployed as a CloudFlare Worker consistently fails verification with 'INVALID' response from PayPal's IPN simulator. The identical webhook processing logic works fine when tested locally with Node.js. We're calling the PayPal IPN verification endpoint with the raw POST body and all headers intact. Could CloudFlare Workers be modifying the request stream before we access it — is there a specific way to handle raw body data in Workers that differs from standard Node environments?"
+  },
+  "expected_routing": "engineering"
+}

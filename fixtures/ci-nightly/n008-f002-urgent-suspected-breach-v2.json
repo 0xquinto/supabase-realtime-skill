@@ -1,0 +1,8 @@
+{
+  "id": "f002-urgent-suspected-breach-v2",
+  "ticket": {
+    "subject": "Critical security incident — API credentials exposed in deployment logs",
+    "body": "Our monitoring detected that production API credentials were logged and stored in CloudWatch logs approximately 2 hours ago due to a misconfigured environment variable. The logs are publicly accessible via our exposed monitoring dashboard. We need immediate credential revocation, a complete audit of API usage during the exposure window, and confirmation of any unauthorized access attempts. This requires urgent action as an active security incident."
+  },
+  "expected_routing": "urgent"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "f010-eng-query-perf-regression-v3",
+  "ticket": {
+    "subject": "Query performance degraded 6x after upgrading to Postgres 16 from 14",
+    "body": "We migrated from Postgres 14 to 16 three days ago. One of our reporting queries has become significantly slower—now takes 3.8s median vs 0.65s previously. The query does a range scan on a 120M-row table with a BRIN index on a timestamp column. EXPLAIN ANALYZE indicates the optimizer switched to a sequential scan instead of using the BRIN index. Have there been changes to BRIN cost calculations in 16, or should we rebuild statistics and indexes?"
+  },
+  "expected_routing": "engineering"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "f004-urgent-payment-failures",
+  "ticket": {
+    "subject": "All checkout payments failing for past 20 minutes",
+    "body": "Every checkout attempt since ~14:10 UTC is failing at the payment-capture step. Our Stripe dashboard shows the calls are reaching them but our Edge Function returns 500 before persisting the order. Active checkout sessions are dropping. Revenue is down to zero right now."
+  },
+  "expected_routing": "urgent"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "f009-eng-migration-rls-policy-v2",
+  "ticket": {
+    "subject": "Adding UNIQUE constraint to existing column — RLS policy prevents constraint validation",
+    "body": "Attempting to add a UNIQUE constraint on an existing `email` column in a 8.5M-row table. The constraint creation fails because our RLS policy restricts updates to `auth.uid() = owner_id`, but the constraint validation process runs as service_role and can't bypass the policy check. Is there a standard approach to adding constraints on RLS-protected tables without temporarily disabling row-level security, or should we plan for a maintenance window?"
+  },
+  "expected_routing": "engineering"
+}

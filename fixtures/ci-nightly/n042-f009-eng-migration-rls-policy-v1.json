@@ -1,0 +1,8 @@
+{
+  "id": "f009-eng-migration-rls-policy-v1",
+  "ticket": {
+    "subject": "Migrating enum column to new type — RLS policy blocks type casting during backfill",
+    "body": "We need to migrate a `status varchar` column to a new `status_enum` type on an 8M-row table. Running `alter column status type status_enum using status::status_enum` fails partway through because our RLS policy enforces `org_id = current_user_org()`, but the migration executes as postgres role. About 5% of rows hit the policy violation during the type cast. Should I revoke RLS temporarily, or is there a standard approach for schema migrations that respect row-level security?"
+  },
+  "expected_routing": "engineering"
+}

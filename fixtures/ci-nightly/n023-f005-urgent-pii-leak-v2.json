@@ -1,0 +1,8 @@
+{
+  "id": "f005-urgent-pii-leak-v2",
+  "ticket": {
+    "subject": "Production database exposing customer payment data across accounts — urgent access control failure",
+    "body": "We've identified a critical security breach where multiple clients can access other accounts' payment information (card tokens, billing addresses, transaction history) through the API. This started after yesterday's authentication service update. One of the affected customers is in California, triggering CCPA notification requirements with a 45-day deadline. We need immediate help rolling back the changes and auditing which data was accessed and by whom."
+  },
+  "expected_routing": "urgent"
+}

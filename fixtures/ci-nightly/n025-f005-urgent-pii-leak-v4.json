@@ -1,0 +1,8 @@
+{
+  "id": "f005-urgent-pii-leak-v4",
+  "ticket": {
+    "subject": "Customer accessing unauthorized account data through API — authentication bypass",
+    "body": "We've identified that a customer account can retrieve another organization's transaction records and payment information via our REST API. This appears to be an authentication token validation issue introduced in today's deployment. One of the affected organizations is UK-based, which triggers our GDPR incident response protocol with a 72-hour notification requirement. Can you urgently review the authentication middleware changes and verify the token scope enforcement?"
+  },
+  "expected_routing": "urgent"
+}

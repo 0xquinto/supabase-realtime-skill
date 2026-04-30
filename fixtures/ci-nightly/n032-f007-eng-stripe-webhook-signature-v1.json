@@ -1,0 +1,8 @@
+{
+  "id": "f007-eng-stripe-webhook-signature-v1",
+  "ticket": {
+    "subject": "PayPal IPN validation errors in Cloudflare Worker",
+    "body": "Our PayPal IPN listener deployed as a Cloudflare Worker consistently fails validation with 'Invalid transaction signature'. The identical webhook verification logic runs fine in our local Node.js environment. We're calling the PayPal SDK's validateMessage() method and passing the raw request body. The issue might be related to how Workers handle request streams — does Cloudflare buffer or modify the body before our handler accesses it?"
+  },
+  "expected_routing": "engineering"
+}

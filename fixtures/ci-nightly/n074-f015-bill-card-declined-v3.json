@@ -1,0 +1,8 @@
+{
+  "id": "f015-bill-card-declined-v3",
+  "ticket": {
+    "subject": "Payment method update not reflecting on outstanding balance",
+    "body": "We received a decline notification for our March invoice yesterday. I've updated our payment method in the account settings to use a new card, but the invoice still displays as unpaid. Should the system automatically recharge the card, or do I need to manually resubmit payment? Concerned about potential service interruption if this isn't resolved quickly."
+  },
+  "expected_routing": "billing"
+}

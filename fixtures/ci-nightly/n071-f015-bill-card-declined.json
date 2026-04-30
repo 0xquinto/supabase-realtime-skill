@@ -1,0 +1,8 @@
+{
+  "id": "f015-bill-card-declined",
+  "ticket": {
+    "subject": "Card on file declined — need to update payment method",
+    "body": "Got an email this morning that our April auto-charge failed (card expired). Updated the card in the dashboard but the invoice still shows 'past due'. Will it retry automatically, or do I need to manually trigger the payment? Don't want the project to enter a paused state."
+  },
+  "expected_routing": "billing"
+}

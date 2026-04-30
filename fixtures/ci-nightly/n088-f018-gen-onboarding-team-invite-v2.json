@@ -1,0 +1,8 @@
+{
+  "id": "f018-gen-onboarding-team-invite-v2",
+  "ticket": {
+    "subject": "Can I set up a colleague with view-only permissions in my workspace?",
+    "body": "We just created our account and I want to onboard my team member to review reports without being able to make changes. When I go through the member invitation process, I only see 'Admin' and 'Editor' as available role options. Is there a read-only or Viewer role available that I'm not seeing in the settings?"
+  },
+  "expected_routing": "general"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "f010-eng-query-perf-regression-v4",
+  "ticket": {
+    "subject": "Query performance degraded after upgrading to Postgres 14 from 13",
+    "body": "We completed a migration from Postgres 13 to 14 three days ago. One of our dashboard queries (aggregation on a 200M-row events table using a BRIN index) regressed from 1.8s to 7.1s p99. The EXPLAIN ANALYZE output indicates the query planner is now choosing a sequential scan instead of the BRIN index. We've already run ANALYZE on the affected table. Could this be related to changes in BRIN index cost calculations between these versions, or should we investigate parameter tuning?"
+  },
+  "expected_routing": "engineering"
+}

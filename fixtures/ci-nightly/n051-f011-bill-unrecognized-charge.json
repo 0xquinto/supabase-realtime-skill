@@ -1,0 +1,8 @@
+{
+  "id": "f011-bill-unrecognized-charge",
+  "ticket": {
+    "subject": "Charged $499 last month but my plan is the $99 Pro tier",
+    "body": "My April invoice shows a $499 charge, but our subscription page confirms we're on Pro ($99/month). The invoice has three line items I don't recognize: 'Compute add-on $250', 'Bandwidth overage $100', and 'Storage tier upgrade $50'. We didn't change anything — please clarify what these are or refund the difference."
+  },
+  "expected_routing": "billing"
+}
