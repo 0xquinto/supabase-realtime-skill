@@ -38,11 +38,10 @@ Deno.serve(async (req) => {
     ...(authToken ? { authToken } : {}),
   });
 
-  // Stateless: sessionIdGenerator: undefined disables session tracking.
+  // Stateless: omitting sessionIdGenerator disables session tracking.
   // enableJsonResponse: true returns a single JSON response per POST instead
   // of opening an SSE stream — simpler match for the bounded tool-call model.
   const transport = new WebStandardStreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
     enableJsonResponse: true,
   });
 
