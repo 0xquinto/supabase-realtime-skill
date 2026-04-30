@@ -1,7 +1,14 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
   "files": {
-    "ignore": ["dist", "node_modules", "eval/reports", "vendor"]
+    "ignore": [
+      "dist",
+      "node_modules",
+      "eval/reports",
+      "vendor",
+      "supabase/functions",
+      "supabase/.temp"
+    ]
   },
   "linter": {
     "enabled": true,
