@@ -1,0 +1,37 @@
+{
+  "name": "supabase-realtime-skill",
+  "version": "0.0.0",
+  "description": "Agent Skill + MCP server for Supabase Realtime/CDC. Bounded subscription pattern fits Edge Function isolate budgets.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js",
+      "require": "./dist/client/index.cjs"
+    }
+  },
+  "files": ["dist", "SKILL.md", "references", "manifest.json"],
+  "scripts": {
+    "build": "bun build src/client/index.ts --outdir dist/client --target node && bun build src/client/index.ts --outdir dist/client --target node --format cjs --outfile dist/client/index.cjs",
+    "test:fast": "vitest run --project fast",
+    "test:smoke": "vitest run --project smoke",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write ."
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
