@@ -108,3 +108,24 @@ Pick **one** of these in the next session, then re-apply T8:
 `@modelcontextprotocol/sdk@1.29.0`'s `SSEServerTransport` constructor is `(_endpoint: string, res: ServerResponse, options?: ...)` — it requires a Node `ServerResponse` from `node:http`. The plan code passes `new Response()` (web-standard `Response`), which won't typecheck or run. The SDK also marks SSE as deprecated in favor of `StreamableHTTPServerTransport`.
 
 This bites only after the bundle resolver is fixed. When T8 is re-attempted, the entry should use `StreamableHTTPServerTransport` (or a Deno-native SSE shim wrapping the server's `connect`+`send`). For the GET-200 milestone alone, the `if (url.pathname.endsWith("/sse"))` branch can be deleted entirely — it's not exercised by the smoke-call.
+
+## Resolution (2026-04-30)
+
+**T8 deploy concern: RESOLVED.** Edge Function deploys; `curl https://<ref>.functions.supabase.co/mcp` returns HTTP/2 200.
+
+The reshape used **`.ts` extensions, not `.js`**. The "Proposed Week-2 reshape" Option 1 above was directionally right (one extension across the board) but wrong on which extension. A first attempt with `.js` failed at deploy time:
+
+```text
+Module not found "file:///.../src/server/server.js"
+```
+
+Deno's resolver does not fake-resolve `.js` to `.ts` source the way `tsc` does under `moduleResolution: "bundler"` (or the way Node ESM + a TS loader does post-build). Deno requires the file to exist at the imported extension. Since the on-disk source is `.ts`, the imports must be `.ts`.
+
+What the corrected reshape ships:
+
+- All relative imports across `src/`, `vendor/`, `tests/`, `supabase/functions/` use explicit `.ts` extensions.
+- `tsconfig.json` adds `allowImportingTsExtensions: true` (satisfied by the existing `tsc --noEmit` typecheck script; emission goes through `bun build`, which rewrites `.ts` to `.js` automatically).
+- `supabase/functions/mcp/deno.json` carries `npm:`-aliased entries for `@modelcontextprotocol/sdk/server/index.js`, `@modelcontextprotocol/sdk/types.js`, `@supabase/supabase-js`, and `zod`. Relative imports inside `src/` need no map entries — Deno walks the file tree.
+- The `/sse` branch is deleted from the Edge Function entry (the secondary concern above). `StreamableHTTPServerTransport` rewire remains deferred to a later task.
+
+The original analysis above is preserved as the trail of reasoning — Option 1's *cost* assessment ("touches ~15 files; mechanical") was accurate; only the extension choice needed correction.
