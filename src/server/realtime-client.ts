@@ -181,3 +181,133 @@ export async function boundedWatch(input: BoundedWatchInput): Promise<WatchTable
     await input.adapter.unsubscribe();
   }
 }
+
+// ---------------------------------------------------------------------------
+// Broadcast adapter — mirrors the postgres-changes shape above for the
+// Realtime broadcast channel type. event_filter is client-side: realtime-js'
+// broadcast surface accepts a single event filter on `on(...)`, but bounding
+// to a literal event would force a separate adapter per filter and lose the
+// "subscribe once, observe many" shape. We listen with `event: "*"` and let
+// boundedSubscribe filter — the double-filter (here + below) is defensive
+// and harmless when no filter is supplied.
+// ---------------------------------------------------------------------------
+
+export interface BroadcastReceived {
+  channel: string;
+  event: string;
+  payload: Record<string, unknown>;
+  received_at: string;
+}
+
+export interface BroadcastAdapter {
+  subscribe(opts: {
+    channel: string;
+    event_filter?: string;
+    onBroadcast: (b: BroadcastReceived) => void;
+  }): Promise<void>;
+  unsubscribe(): Promise<void>;
+}
+
+export async function boundedSubscribe(input: {
+  adapter: BroadcastAdapter;
+  channel: string;
+  event_filter?: string;
+  timeout_ms: number;
+  max_events: number;
+}): Promise<{ broadcasts: BroadcastReceived[]; closed_reason: "max_events" | "timeout" }> {
+  const broadcasts: BroadcastReceived[] = [];
+  let resolveOnEvent: ((reason: "max_events") => void) | null = null;
+
+  const arrived = new Promise<"max_events">((resolve) => {
+    resolveOnEvent = resolve;
+  });
+
+  await input.adapter.subscribe({
+    channel: input.channel,
+    ...(input.event_filter !== undefined ? { event_filter: input.event_filter } : {}),
+    onBroadcast: (b) => {
+      if (input.event_filter && b.event !== input.event_filter) return;
+      broadcasts.push(b);
+      if (broadcasts.length >= input.max_events && resolveOnEvent) {
+        resolveOnEvent("max_events");
+        resolveOnEvent = null;
+      }
+    },
+  });
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeoutPromise = new Promise<"timeout">((resolve) => {
+      timeoutId = setTimeout(() => resolve("timeout"), input.timeout_ms);
+    });
+    const closed_reason = await Promise.race([arrived, timeoutPromise]);
+    return { broadcasts, closed_reason };
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+    await input.adapter.unsubscribe();
+  }
+}
+
+// realtime-js' broadcast `on(..., { event: "*" }, cb)` overload calls cb with
+// `{ type: "broadcast", event: string, meta?, [key: string]: any }`. We type
+// the parameter as a structural subset so noExplicitAny doesn't fire — and so
+// future SDK shape drift (extra fields on the wildcard payload) doesn't
+// silently break compilation.
+type SupabaseBroadcastPayload = {
+  type: string;
+  event: string;
+  payload?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
+export function makeSupabaseBroadcastAdapter(cfg: SupabaseAdapterConfig): BroadcastAdapter {
+  // exactOptionalPropertyTypes: true rejects `{ global: undefined }`. Build
+  // options conditionally — same pattern as makeSupabaseAdapter above.
+  const clientOpts: Parameters<typeof createClient>[2] = {};
+  if (cfg.authToken) {
+    clientOpts.global = { headers: { Authorization: `Bearer ${cfg.authToken}` } };
+  }
+  const client: SupabaseClient = createClient(cfg.supabaseUrl, cfg.supabaseKey, clientOpts);
+  let channel: RealtimeChannel | null = null;
+
+  return {
+    async subscribe({ channel: name, onBroadcast }) {
+      channel = client.channel(name);
+      channel.on(
+        REALTIME_LISTEN_TYPES.BROADCAST,
+        { event: "*" },
+        (msg: SupabaseBroadcastPayload) => {
+          onBroadcast({
+            channel: name,
+            event: msg.event,
+            payload: (msg.payload ?? {}) as Record<string, unknown>,
+            received_at: new Date().toISOString(),
+          });
+        },
+      );
+      await new Promise<void>((resolve, reject) => {
+        const subscribeTimeoutMs = cfg.subscribeTimeoutMs ?? 10_000;
+        const timer = setTimeout(() => reject(new Error("subscribe timeout")), subscribeTimeoutMs);
+        channel?.subscribe((status) => {
+          if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
+            clearTimeout(timer);
+            resolve();
+          } else if (
+            status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR ||
+            status === REALTIME_SUBSCRIBE_STATES.TIMED_OUT ||
+            status === REALTIME_SUBSCRIBE_STATES.CLOSED
+          ) {
+            clearTimeout(timer);
+            reject(new Error(`subscribe failed: ${status}`));
+          }
+        });
+      });
+    },
+    async unsubscribe() {
+      if (channel) {
+        await client.removeChannel(channel);
+        channel = null;
+      }
+    },
+  };
+}
