@@ -74,13 +74,15 @@ export async function boundedWatch(input: BoundedWatchInput): Promise<WatchTable
 
   await input.adapter.subscribe({ table: input.table, onEvent });
 
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
-    const timeoutPromise = new Promise<"timeout">((resolve) =>
-      setTimeout(() => resolve("timeout"), input.timeout_ms),
-    );
+    const timeoutPromise = new Promise<"timeout">((resolve) => {
+      timeoutId = setTimeout(() => resolve("timeout"), input.timeout_ms);
+    });
     const closed_reason = await Promise.race([eventArrived, timeoutPromise]);
     return { events, closed_reason };
   } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
     await input.adapter.unsubscribe();
   }
 }

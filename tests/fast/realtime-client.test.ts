@@ -114,4 +114,21 @@ describe("boundedWatch", () => {
     // subscribe failed before adapter installed listener; unsubscribe still safe
     expect(unsubscribed()).toBe(false);
   });
+
+  it("clears the timeout when max_events wins the race (no timer leak)", async () => {
+    vi.useFakeTimers();
+    const { adapter, emit } = makeAdapter();
+    const promise = boundedWatch({
+      adapter,
+      table: "support_tickets",
+      predicate: { event: "INSERT" },
+      timeout_ms: 60_000,
+      max_events: 1,
+    });
+    queueMicrotask(() => emit({ event: "INSERT", new: { id: "a" }, old: null }));
+    const result = await promise;
+    expect(result.closed_reason).toBe("max_events");
+    expect(vi.getTimerCount()).toBe(0);
+    vi.useRealTimers();
+  });
 });
