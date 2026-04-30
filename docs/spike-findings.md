@@ -158,3 +158,21 @@ Two findings from the spike change how Phase 2/3 work must be designed:
 
 The 4.6× p95 headroom (438 ms vs 2000 ms threshold) means Phase 2 can layer a few hundred ms of additional work per tool call (RLS check, schema introspection, Edge Function cold-start tax) without breaching the spec target. There's no engineering pressure to optimize the bounded primitive itself; the budget is for the surrounding tool surface.
 
+---
+
+# T8 secondary concern resolved (2026-04-30, post-build)
+
+**Concern from Phase 1 (line 106):** SSE transport deprecated and Node-only; entry returned a placeholder body for non-`/sse` paths and constructed `makeServer` only to exercise the import graph. POST tool-calls didn't round-trip end-to-end.
+
+**Resolution.** Wired `WebStandardStreamableHTTPServerTransport` (SDK 1.29) into `supabase/functions/mcp/index.ts`. Stateless mode (`sessionIdGenerator` omitted), `enableJsonResponse: true` for single-shot JSON responses matching the bounded tool-call shape. Each request builds a fresh `Server + Transport` pair, runs one JSON-RPC exchange via `transport.handleRequest(req)`, then tears both down in a `finally`. GET `/` and GET `/health` stay on a cheap text liveness response so uptime probes don't pay the connect/teardown tax.
+
+Auxiliary fixes that surfaced during the rewire:
+
+- **Deno's strict typecheck** flagged the `(req) =>` parameter on `setRequestHandler(CallToolRequestSchema, ...)` as TS7006 implicit-any. tsc accepted it via inference; Deno didn't. Added an explicit `req: CallToolRequest` annotation in `src/server/server.ts` (using the SDK's exported `Infer`-derived type). Both checkers pass now.
+- **Zod peer-version mismatch.** `@modelcontextprotocol/sdk@1.29.0` peer-requires `zod ^3.25 || ^4.0`; the import_map pinned `zod@3.23.0`. Bumped to `3.25.76` (the version already installed via npm) — silences the deno peer-dep warning.
+- **`exactOptionalPropertyTypes: true` rejects `{ field: undefined }` literals.** The Edge Function file isn't in the tsc graph so it slipped through there; the new `tests/fast/transport.test.ts` (which IS) caught it. Switched both files to omit `sessionIdGenerator` entirely. Same runtime behavior.
+
+**In-process verification.** `tests/fast/transport.test.ts` boots a fresh Server + Transport, fires JSON-RPC `initialize` and `tools/list` via fabricated `Request` objects, and asserts both round-trip cleanly. This catches transport-wiring drift before deploy. 35/35 fast tests pass.
+
+**Live-deploy verification** (POST `Authorization: Bearer <jwt>` with a JSON-RPC `tools/call` body) is the operator's next step — see `docs/ship-status.md` item 3.
+
