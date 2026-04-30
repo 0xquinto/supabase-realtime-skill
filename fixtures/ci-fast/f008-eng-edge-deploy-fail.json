@@ -1,0 +1,8 @@
+{
+  "id": "f008-eng-edge-deploy-fail",
+  "ticket": {
+    "subject": "supabase functions deploy fails: 'Module not found' on relative import",
+    "body": "Trying to deploy a function that imports a shared module from `../../shared/types.ts`. The bundler errors with 'Module not found' even though the file exists at that path. Works fine in `supabase functions serve` locally. Is the deploy bundler stricter about something?"
+  },
+  "expected_routing": "engineering"
+}

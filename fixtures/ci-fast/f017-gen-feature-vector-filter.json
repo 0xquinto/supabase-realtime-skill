@@ -1,0 +1,8 @@
+{
+  "id": "f017-gen-feature-vector-filter",
+  "ticket": {
+    "subject": "Feature request: pgvector queries with metadata pre-filter that uses HNSW",
+    "body": "Right now if I add a WHERE clause before an HNSW similarity search, the planner falls back to a sequential scan on the filtered subset rather than walking the index. It would be amazing if there were an opinionated pattern (or extension config) that makes pre-filter + HNSW work cleanly. Is this on any roadmap, or is the current advice 'use a generated column + partial index'?"
+  },
+  "expected_routing": "general"
+}

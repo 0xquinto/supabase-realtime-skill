@@ -1,0 +1,8 @@
+{
+  "id": "f003-urgent-data-corruption",
+  "ticket": {
+    "subject": "Orders table missing 4,200 rows after last night's migration",
+    "body": "We ran a routine migration around 02:30 UTC and our orders table is now showing 4,217 fewer rows than the snapshot from 02:00. Can you confirm whether PITR is available for the last 12 hours on our project? We need to recover the lost rows before customers notice missing receipts. This is a data-loss incident, not a bug report."
+  },
+  "expected_routing": "urgent"
+}

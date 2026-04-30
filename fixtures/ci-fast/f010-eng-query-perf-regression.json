@@ -1,0 +1,8 @@
+{
+  "id": "f010-eng-query-perf-regression",
+  "ticket": {
+    "subject": "Same query 8x slower after Postgres 15 → 16 upgrade",
+    "body": "We upgraded from Postgres 15 to 16 last week. A specific query (filtered scan on a 50M-row table with a multi-column GIN index) now takes 4.2s p95 vs 0.5s on 15. EXPLAIN ANALYZE shows the planner picked a different index. Is there a known regression around GIN cost estimation in 16, or is this a stats-refresh issue?"
+  },
+  "expected_routing": "engineering"
+}

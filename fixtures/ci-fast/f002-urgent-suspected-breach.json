@@ -1,0 +1,8 @@
+{
+  "id": "f002-urgent-suspected-breach",
+  "ticket": {
+    "subject": "Suspected unauthorized access — service-role key in public commit",
+    "body": "Our security team noticed our project's service_role key was accidentally pushed to a public GitHub repo about 3 hours ago. The commit was force-pushed away but it was almost certainly scraped. We need the key rotated immediately and an audit log of any API requests using it since the leak window. Treating this as an active breach."
+  },
+  "expected_routing": "urgent"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "f018-gen-onboarding-team-invite",
+  "ticket": {
+    "subject": "How do I invite a teammate to my org with read-only access?",
+    "body": "Just signed up and trying to add my coworker so she can view the dashboard but not modify anything. The invite flow only seems to offer 'Owner' or 'Developer' roles. Is there a Viewer or read-only role somewhere I'm missing?"
+  },
+  "expected_routing": "general"
+}

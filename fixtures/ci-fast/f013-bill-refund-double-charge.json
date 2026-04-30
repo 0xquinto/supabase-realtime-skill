@@ -1,0 +1,8 @@
+{
+  "id": "f013-bill-refund-double-charge",
+  "ticket": {
+    "subject": "Charged twice for April invoice — need refund",
+    "body": "I see two identical $99 charges from Supabase on my card statement, both dated Apr 22. Order IDs end in -7f3a and -7f3b respectively. The dashboard only shows one invoice for April. Please refund the duplicate charge."
+  },
+  "expected_routing": "billing"
+}

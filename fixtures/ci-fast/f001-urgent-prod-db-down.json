@@ -1,0 +1,8 @@
+{
+  "id": "f001-urgent-prod-db-down",
+  "ticket": {
+    "subject": "Production database completely unresponsive — total outage",
+    "body": "Our primary Postgres has been throwing connection refused for ~12 minutes. All write traffic is failing and customer-facing endpoints return 500. We've tried failover but the read replica is also unreachable from the app tier. This is full revenue loss — please escalate."
+  },
+  "expected_routing": "urgent"
+}

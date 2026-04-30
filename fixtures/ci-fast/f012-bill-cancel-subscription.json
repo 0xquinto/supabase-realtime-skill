@@ -1,0 +1,8 @@
+{
+  "id": "f012-bill-cancel-subscription",
+  "ticket": {
+    "subject": "How do I cancel my Pro subscription?",
+    "body": "We're winding down the project that uses this account and need to cancel before the next billing cycle on May 15. I can't find a cancel button in the dashboard. Can you process the cancellation effective end of current period?"
+  },
+  "expected_routing": "billing"
+}
