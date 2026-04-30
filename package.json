@@ -14,7 +14,7 @@
   "files": ["dist", "SKILL.md", "references", "manifest.json"],
   "scripts": {
     "build": "bun build src/client/index.ts --outdir dist/client --target node && bun build src/client/index.ts --outdir dist/client --target node --format cjs --outfile dist/client/index.cjs",
-    "test:fast": "vitest run --project fast --passWithNoTests",
+    "test:fast": "vitest run --project fast",
     "test:smoke": "vitest run --project smoke --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
