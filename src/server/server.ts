@@ -6,7 +6,11 @@
 // Deno Edge Function entry, so keep it that way.
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import {
+  type CallToolRequest,
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
 import { createClient } from "@supabase/supabase-js";
 import postgres from "postgres";
 import { ToolError } from "../types/errors.ts";
@@ -122,7 +126,7 @@ export function makeServer(cfg: ServerConfig): Server {
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOL_DEFS }));
 
-  server.setRequestHandler(CallToolRequestSchema, async (req) => {
+  server.setRequestHandler(CallToolRequestSchema, async (req: CallToolRequest) => {
     try {
       let result: unknown;
       switch (req.params.name) {

@@ -2,9 +2,10 @@
   "imports": {
     "supabase-realtime-skill/": "../../../src/",
     "@modelcontextprotocol/sdk/server/index.js": "npm:@modelcontextprotocol/sdk@1.29.0/server/index.js",
+    "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js": "npm:@modelcontextprotocol/sdk@1.29.0/server/webStandardStreamableHttp.js",
     "@modelcontextprotocol/sdk/types.js": "npm:@modelcontextprotocol/sdk@1.29.0/types.js",
     "@supabase/supabase-js": "npm:@supabase/supabase-js@2.45.0",
     "postgres": "npm:postgres@3.4.9",
-    "zod": "npm:zod@3.23.0"
+    "zod": "npm:zod@3.25.76"
   }
 }

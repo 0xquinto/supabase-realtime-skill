@@ -2,36 +2,55 @@
 //
 // Deno runtime. Uses npm: specifiers (Supabase Edge Functions support
 // these via Deno's npm compat). Must NOT import anything Node-specific.
+//
+// Per-request stateless MCP. Each invocation builds a fresh
+// Server + WebStandardStreamableHTTPServerTransport pair and runs one
+// JSON-RPC exchange. The Edge Function isolate caps wall-clock at 150s,
+// matching the bounded-subscription tool-call shape.
 
-// For local-dev verification (Week 1 spike) use the relative import:
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { makeServer } from "../../../src/server/server.ts";
 
-// After npm publish in T30, swap to the published package:
+// After npm publish, swap the makeServer import to:
 // import { makeServer } from "npm:supabase-realtime-skill@latest/dist/server.js";
-
-// SSE/StreamableHTTP transport rewire is the next milestone — see
-// docs/spike-findings.md (T8 secondary). For now this entry constructs the
-// server to exercise the import graph at deploy time (catches misconfig
-// early) and returns a placeholder for non-/sse paths.
 
 // SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_DB_URL are auto-injected by
 // the Edge Functions runtime — they're "reserved" only in the sense that
 // you can't SET them via `supabase secrets set`. Reading them works fine.
-Deno.serve((req) => {
+Deno.serve(async (req) => {
+  // Liveness probe — answer GET / cheaply without spinning up a Server.
+  // The MCP transport responds to GET on the streaming endpoint with SSE,
+  // so we keep liveness on a separate path.
+  const url = new URL(req.url);
+  if (req.method === "GET" && (url.pathname === "/" || url.pathname.endsWith("/health"))) {
+    return new Response("supabase-realtime-skill MCP — ok", { status: 200 });
+  }
+
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
   const databaseUrl = Deno.env.get("SUPABASE_DB_URL") ?? undefined;
   const authToken = req.headers.get("Authorization")?.replace(/^Bearer /, "");
 
-  // Construct the server so the full import graph (5 tools + postgres
-  // + supabase-js) is exercised at deploy time. Transport wiring lands
-  // in a follow-up task.
-  makeServer({
+  const server = makeServer({
     supabaseUrl,
     supabaseAnonKey,
     ...(databaseUrl ? { databaseUrl } : {}),
     ...(authToken ? { authToken } : {}),
   });
 
-  return new Response("supabase-realtime-skill MCP — transport pending", { status: 200 });
+  // Stateless: sessionIdGenerator: undefined disables session tracking.
+  // enableJsonResponse: true returns a single JSON response per POST instead
+  // of opening an SSE stream — simpler match for the bounded tool-call model.
+  const transport = new WebStandardStreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+    enableJsonResponse: true,
+  });
+
+  await server.connect(transport);
+  try {
+    return await transport.handleRequest(req);
+  } finally {
+    await transport.close().catch(() => {});
+    await server.close().catch(() => {});
+  }
 });
