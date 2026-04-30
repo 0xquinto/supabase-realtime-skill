@@ -1,0 +1,39 @@
+name: ci-fast
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  fast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun run test:fast
+
+  ci-fast-eval:
+    runs-on: ubuntu-latest
+    needs: fast
+    if: ${{ secrets.EVAL_SUPABASE_PAT != '' }}
+    env:
+      EVAL_SUPABASE_PAT: ${{ secrets.EVAL_SUPABASE_PAT }}
+      EVAL_HOST_PROJECT_REF: ${{ secrets.EVAL_HOST_PROJECT_REF }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+      - run: bun install --frozen-lockfile
+      - run: bun run eval/runner.ts ci-fast
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-fast-report
+          path: eval/reports/
