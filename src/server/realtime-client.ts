@@ -8,6 +8,14 @@
 // The RealtimeAdapter interface is the seam — production wires it to
 // @supabase/supabase-js channels; tests substitute a fake.
 
+import {
+  REALTIME_LISTEN_TYPES,
+  REALTIME_SUBSCRIBE_STATES,
+  type RealtimeChannel,
+  type RealtimePostgresChangesPayload,
+  type SupabaseClient,
+  createClient,
+} from "@supabase/supabase-js";
 import type { WatchTableInput, WatchTableOutput } from "../types/schemas";
 
 export interface ChangeEvent {
@@ -53,6 +61,90 @@ function matchesEvent(ev: ChangeEvent, predicate: WatchTableInput["predicate"]):
     case "in":
       return Array.isArray(rhs) && rhs.includes(lhs);
   }
+}
+
+export interface SupabaseAdapterConfig {
+  supabaseUrl: string;
+  supabaseKey: string;
+  authToken?: string; // forwarded as Authorization header for RLS
+  schema?: string; // default "public"
+}
+
+/**
+ * Production RealtimeAdapter wired to @supabase/supabase-js. The seam keeps
+ * boundedWatch testable; this is what runs in deployment.
+ *
+ * 10s cap on the SUBSCRIBED handshake — that ack roundtrip is part of every
+ * cold start (the spec's 200-400ms cold-start figure absorbs it). authToken
+ * flows through as Authorization so RLS applies natively without re-implementing
+ * row policies in the skill.
+ */
+export function makeSupabaseAdapter(table: string, cfg: SupabaseAdapterConfig): RealtimeAdapter {
+  const schema = cfg.schema ?? "public";
+  // Build options conditionally — `exactOptionalPropertyTypes: true` rejects
+  // assigning `undefined` to an optional field.
+  const clientOpts: Parameters<typeof createClient>[2] = {
+    realtime: { params: { eventsPerSecond: 20 } },
+  };
+  if (cfg.authToken) {
+    clientOpts.global = { headers: { Authorization: `Bearer ${cfg.authToken}` } };
+  }
+  const client: SupabaseClient = createClient(cfg.supabaseUrl, cfg.supabaseKey, clientOpts);
+  const channelName = `realtime:${schema}:${table}`;
+  let channel: RealtimeChannel | null = null;
+
+  // Realtime payloads carry `new: {}` / `old: {}` for non-applicable sides
+  // (INSERT has empty old, DELETE has empty new). Our ChangeEvent contract
+  // uses null for "absent" — coerce here so the matcher and downstream
+  // consumers see a consistent shape.
+  const toRow = (
+    val: Record<string, unknown> | Partial<Record<string, unknown>> | undefined,
+  ): Record<string, unknown> | null => {
+    if (!val) return null;
+    if (Object.keys(val).length === 0) return null;
+    return val as Record<string, unknown>;
+  };
+
+  return {
+    async subscribe({ onEvent }) {
+      channel = client.channel(channelName);
+      channel.on(
+        REALTIME_LISTEN_TYPES.POSTGRES_CHANGES,
+        { event: "*", schema, table },
+        (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
+          onEvent({
+            event: payload.eventType,
+            table: payload.table,
+            schema: payload.schema,
+            new: toRow(payload.new),
+            old: toRow(payload.old),
+            commit_timestamp: payload.commit_timestamp,
+          });
+        },
+      );
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("subscribe timeout")), 10_000);
+        channel?.subscribe((status) => {
+          if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
+            clearTimeout(timer);
+            resolve();
+          } else if (
+            status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR ||
+            status === REALTIME_SUBSCRIBE_STATES.TIMED_OUT
+          ) {
+            clearTimeout(timer);
+            reject(new Error(`subscribe failed: ${status}`));
+          }
+        });
+      });
+    },
+    async unsubscribe() {
+      if (channel) {
+        await client.removeChannel(channel);
+        channel = null;
+      }
+    },
+  };
 }
 
 export async function boundedWatch(input: BoundedWatchInput): Promise<WatchTableOutput> {
