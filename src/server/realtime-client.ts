@@ -16,7 +16,7 @@ import {
   type SupabaseClient,
   createClient,
 } from "@supabase/supabase-js";
-import type { WatchTableInput, WatchTableOutput } from "../types/schemas";
+import type { WatchTableInput, WatchTableOutput } from "../types/schemas.ts";
 
 export interface ChangeEvent {
   event: "INSERT" | "UPDATE" | "DELETE";

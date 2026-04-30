@@ -1,10 +1,10 @@
-import { ToolError } from "../types/errors";
+import { ToolError } from "../types/errors.ts";
 import {
   type WatchTableInput,
   WatchTableInputSchema,
   type WatchTableOutput,
-} from "../types/schemas";
-import { type RealtimeAdapter, boundedWatch } from "./realtime-client";
+} from "../types/schemas.ts";
+import { type RealtimeAdapter, boundedWatch } from "./realtime-client.ts";
 
 export interface WatchTableDeps {
   adapterFor(table: string): RealtimeAdapter;

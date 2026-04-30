@@ -3,7 +3,7 @@ import {
   type ChangeEvent,
   type RealtimeAdapter,
   boundedWatch,
-} from "../../src/server/realtime-client";
+} from "../../src/server/realtime-client.ts";
 
 function makeAdapter(): {
   adapter: RealtimeAdapter;

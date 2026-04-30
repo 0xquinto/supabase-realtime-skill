@@ -9,7 +9,7 @@
 // (different endpoint, different shape, no id/name field) — see
 // docs/decisions/0009-branch-api-shapes.md if/when it lands.
 
-import type { ApiClient, BranchDetails, BranchRecord } from "./api-client";
+import type { ApiClient, BranchDetails, BranchRecord } from "./api-client.ts";
 
 const READY_STATUSES = new Set(["ACTIVE_HEALTHY", "ACTIVE", "READY"]);
 const FAILED_STATUSES = new Set(["FAILED", "INACTIVE"]);

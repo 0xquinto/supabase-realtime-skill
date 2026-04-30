@@ -1,5 +1,9 @@
 {
   "imports": {
-    "supabase-realtime-skill/": "../../../src/"
+    "supabase-realtime-skill/": "../../../src/",
+    "@modelcontextprotocol/sdk/server/index.js": "npm:@modelcontextprotocol/sdk@1.29.0/server/index.js",
+    "@modelcontextprotocol/sdk/types.js": "npm:@modelcontextprotocol/sdk@1.29.0/types.js",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.45.0",
+    "zod": "npm:zod@3.23.0"
   }
 }

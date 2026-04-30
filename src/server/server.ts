@@ -7,9 +7,9 @@
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { ToolError } from "../types/errors";
-import { makeSupabaseAdapter } from "./realtime-client";
-import { handleWatchTable } from "./watch-table";
+import { ToolError } from "../types/errors.ts";
+import { makeSupabaseAdapter } from "./realtime-client.ts";
+import { handleWatchTable } from "./watch-table.ts";
 
 export interface ServerConfig {
   supabaseUrl: string;

@@ -14,7 +14,7 @@
 // vendored ApiClient error format: "<status> <statusText> <body>"
 // If the vendor SHA bumps, recheck the is404 string check below.
 
-import { ApiClient, type BranchDetails } from "../../../vendor/foundation/api-client";
+import { ApiClient, type BranchDetails } from "../../../vendor/foundation/api-client.ts";
 
 export class ResilientApiClient extends ApiClient {
   override async getBranchDetails(branchId: string): Promise<BranchDetails> {

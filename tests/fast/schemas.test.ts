@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { WatchTableInputSchema } from "../../src/types/schemas";
+import { WatchTableInputSchema } from "../../src/types/schemas.ts";
 
 describe("WatchTableInputSchema", () => {
   it("accepts a minimal valid input", () => {

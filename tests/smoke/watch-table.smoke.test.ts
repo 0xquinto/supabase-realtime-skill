@@ -12,10 +12,10 @@
 
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
-import { boundedWatch, makeSupabaseAdapter } from "../../src/server/realtime-client";
-import { buildBranchPoolerUrl, withBranch } from "../../vendor/foundation/branch";
-import { fetchProjectKeys } from "./_helpers/project-keys";
-import { ResilientApiClient } from "./_helpers/resilient-api-client";
+import { boundedWatch, makeSupabaseAdapter } from "../../src/server/realtime-client.ts";
+import { buildBranchPoolerUrl, withBranch } from "../../vendor/foundation/branch.ts";
+import { fetchProjectKeys } from "./_helpers/project-keys.ts";
+import { ResilientApiClient } from "./_helpers/resilient-api-client.ts";
 
 const PAT = process.env.EVAL_SUPABASE_PAT;
 const HOST_REF = process.env.EVAL_HOST_PROJECT_REF;

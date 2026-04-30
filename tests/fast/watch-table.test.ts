@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ChangeEvent, RealtimeAdapter } from "../../src/server/realtime-client";
-import { handleWatchTable } from "../../src/server/watch-table";
+import type { ChangeEvent, RealtimeAdapter } from "../../src/server/realtime-client.ts";
+import { handleWatchTable } from "../../src/server/watch-table.ts";
 
 function fakeAdapter(events: ChangeEvent[]): RealtimeAdapter {
   return {
