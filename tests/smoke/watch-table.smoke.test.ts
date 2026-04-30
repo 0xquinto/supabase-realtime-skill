@@ -13,62 +13,14 @@
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
 import { boundedWatch, makeSupabaseAdapter } from "../../src/server/realtime-client";
-import { ApiClient, type BranchDetails } from "../../vendor/foundation/api-client";
 import { buildBranchPoolerUrl, withBranch } from "../../vendor/foundation/branch";
+import { fetchProjectKeys } from "./_helpers/project-keys";
+import { ResilientApiClient } from "./_helpers/resilient-api-client";
 
 const PAT = process.env.EVAL_SUPABASE_PAT;
 const HOST_REF = process.env.EVAL_HOST_PROJECT_REF;
 const REGION = process.env.EVAL_REGION ?? "us-east-1";
 const SHOULD_RUN = !!(PAT && HOST_REF);
-
-// Vendored ApiClient retries 403/429/5xx but not 404. There's a brief window
-// after POST /v1/projects/{ref}/branches where GET /v1/branches/{id} returns
-// 404 — the create record exists but the underlying project hasn't been
-// provisioned far enough to expose the details endpoint. withBranch makes its
-// first getBranchDetails call immediately, so it can hit that window. Wrap
-// with a 404-tolerant retry; preserve all other behavior.
-class ResilientApiClient extends ApiClient {
-  override async getBranchDetails(branchId: string): Promise<BranchDetails> {
-    const maxAttempts = 8;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        return await super.getBranchDetails(branchId);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        const is404 = msg.startsWith("404 ");
-        if (!is404 || attempt === maxAttempts) throw e;
-        // Backoff caps below the 15s default poll interval so we still land
-        // a fresh poll in withBranch's loop.
-        const delay = Math.min(1000 * 2 ** (attempt - 1), 8000);
-        await new Promise((r) => setTimeout(r, delay));
-      }
-    }
-    // unreachable; loop either returns or throws.
-    throw new Error("unreachable");
-  }
-}
-
-// Branch creation does not return anon/service_role keys — they live behind
-// a separate Management API endpoint. We can't extend the vendored ApiClient
-// (foundation snapshot policy), so we hit the endpoint directly here.
-async function fetchProjectKeys(
-  pat: string,
-  projectRef: string,
-): Promise<{ anon: string; serviceRole: string }> {
-  const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/api-keys`, {
-    headers: { Authorization: `Bearer ${pat}` },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`fetch api-keys failed: ${res.status} ${res.statusText} ${body}`);
-  }
-  const keys = (await res.json()) as Array<{ name?: string; api_key?: string }>;
-  const anon = keys.find((k) => k.name === "anon")?.api_key;
-  const serviceRole = keys.find((k) => k.name === "service_role")?.api_key;
-  if (!anon) throw new Error(`no anon key in api-keys response for ${projectRef}`);
-  if (!serviceRole) throw new Error(`no service_role key for ${projectRef}`);
-  return { anon, serviceRole };
-}
 
 describe.skipIf(!SHOULD_RUN)("watch_table smoke (real branch)", () => {
   it("delivers an INSERT within p95 < 2s on a Pro branch", async () => {
@@ -85,6 +37,9 @@ describe.skipIf(!SHOULD_RUN)("watch_table smoke (real branch)", () => {
         );
         const dbUrl = buildBranchPoolerUrl({ ref: details.ref, db_pass: details.db_pass }, REGION);
         const sql = postgres(dbUrl, { max: 1, prepare: false });
+        // Hoisted so finally can clear pending timers even if try throws
+        // before they're scheduled (no-op on empty array).
+        const insertTimers: ReturnType<typeof setTimeout>[] = [];
         try {
           await sql`create table tickets (id uuid primary key default gen_random_uuid(), body text)`;
           await sql`alter publication supabase_realtime add table tickets`;
@@ -129,15 +84,19 @@ describe.skipIf(!SHOULD_RUN)("watch_table smoke (real branch)", () => {
                 console.log(`[smoke] ${label} committed at +${t}ms`);
               })
               .catch((e) => console.error(`[smoke] ${label} failed: ${e?.message ?? e}`));
-          setTimeout(() => fire("insert#1", "hello-1"), 100);
-          setTimeout(() => fire("insert#2", "hello-2"), 5_000);
-          setTimeout(() => fire("insert#3", "hello-3"), 10_000);
+          insertTimers.push(setTimeout(() => fire("insert#1", "hello-1"), 100));
+          insertTimers.push(setTimeout(() => fire("insert#2", "hello-2"), 5_000));
+          insertTimers.push(setTimeout(() => fire("insert#3", "hello-3"), 10_000));
 
           const result = await watchPromise;
           const matchedAt = Date.now() - insertedAt;
           console.log(
             `[smoke] watch resolved at +${matchedAt}ms closed_reason=${result.closed_reason} events=${result.events.length}`,
           );
+          // Fail loud if every scheduled insert silently failed (the .catch()
+          // above swallows SQL errors). Without this, latency falls back to
+          // matchedAt - matchedAt = 0 and the assertion below passes vacuously.
+          expect(insertTimes.length).toBeGreaterThan(0);
           // Latency is "time from the most-recent committed insert before
           // match → match arrival". This is the metric ci-nightly should
           // measure once warmed.
@@ -150,6 +109,10 @@ describe.skipIf(!SHOULD_RUN)("watch_table smoke (real branch)", () => {
           expect(result.closed_reason).toBe("max_events");
           expect(steadyStateLatency).toBeLessThan(5_000); // single-trial floor
         } finally {
+          // Cancel any pending insert timers BEFORE closing the connection so
+          // late-firing inserts don't race against a closed pool (which would
+          // surface as unhandled rejections or hang sql.end()).
+          for (const t of insertTimers) clearTimeout(t);
           await sql.end();
         }
       },
