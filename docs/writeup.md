@@ -69,25 +69,28 @@ The composition is the headline. Each piece on its own is unremarkable. The Skil
 
 Pre-registered thresholds in `manifest.json` (version 1.0.0, registered 2026-04-30):
 
-| Metric | Threshold | Spike result | ci-nightly (n=100) |
-|---|---|---|---|
-| `latency_to_first_event_ms` p95 | < 2000ms | **438ms** (n=20, single-trial) | _pending — see operator note_ |
-| `missed_events_rate` | < 1% (CI high also < 1%) | — | _pending_ |
-| `spurious_trigger_rate` | < 2% (CI high < 3%) | — | _pending_ |
-| `agent_action_correctness` | ≥ 90% (CI low ≥ 85%) | — | _pending_ |
+| Metric | Threshold | Spike result | ci-nightly (n=100) | Gate |
+|---|---|---|---|---|
+| `latency_to_first_event_ms` p95 | < 2000ms | 438ms (n=20, single-trial) | **1520ms** (p50 1071ms) | PASS |
+| `missed_events_rate` | < 1% (CI high also < 1%) | — | **0%** (0/100; CI high 3.7%) | rate PASS, CI FAIL |
+| `spurious_trigger_rate` | < 2% (CI high < 3%) | — | **0%** (0/100; CI high 3.7%) | rate PASS, CI FAIL |
+| `agent_action_correctness` | ≥ 90% (CI low ≥ 85%) | — | **87%** (CI low 79%) | FAIL |
 
-The spike-latency number is from `eval/spike-latency.ts` (committed `4f51800`): n=20 trials on a single long-lived subscription against a fresh Supabase Pro branch, using the production `makeSupabaseAdapter` end-to-end. Methodology incorporates the T7 spike finding — the first ~5 seconds after a fresh `subscribe()` resolves on a freshly-published table swallow events; the eval uses a long-lived adapter with a discarded warm-up insert to measure steady-state. Full trace in `docs/spike-findings.md`.
+Run: `eval/reports/ci-nightly-1777590748222.json`, single transient branch, ~30 min wallclock, 100 fixtures (20 hand-curated seeds × 5 variations each across 4 routings).
 
-**Operator note on the other three metrics:** they require `bun run eval/runner.ts ci-nightly` to populate. That run was not executed during the v1 build because (a) the available Anthropic API keys returned 401 at synthesizer time, blocking the n=80 fixture augmentation in T26; (b) the user's host project hasn't been authorized for a multi-trial branch run yet. Once a working `ANTHROPIC_API_KEY` is restored, the operator can:
+The spike-latency number is from `eval/spike-latency.ts` (committed `4f51800`): n=20 trials on a single long-lived subscription. The ci-nightly run uses the same long-lived-adapter discipline through the triage agent and reports a higher p95 because each trial includes the agent's tool-use loop (LLM call to claude-haiku-4-5 + retrieval + write-back), not just the event-delivery hop. Both numbers measure what they advertise; the substrate (Realtime delivery) is the smaller share of the 1520ms.
 
-```bash
-bun run eval/synthesize-fixtures.ts        # fills fixtures/ci-nightly/
-bun run eval/runner.ts ci-nightly          # writes eval/reports/ci-nightly-<ts>.json
-```
+**Three real findings from the gate failure:**
 
-…and replace the `_pending_` cells in this table with the actual numbers from the report.
+1. **The substrate is clean.** 0 missed events and 0 spurious triggers across 100 paired fixtures. The bounded-subscription primitive plus the production `makeSupabaseAdapter` did exactly what they should.
 
-What these numbers *don't* tell you, per Bean's construct-validity checklist (cited in `references/eval-methodology.md`): they only score the *worked example* fixtures, not the universe of agent workflows that might use these tools. They tell you the substrate is solid and one specific composition works well; they don't tell you "an arbitrary agent using `watch_table` will succeed." That's a generalization claim the harness deliberately doesn't make.
+2. **The composition has a label-boundary gap.** All 13 misclassifications are concentrated in 3 of 5 `general` seeds (`f016` docs lookup, `f017` feature request, `f019` SSO question) and the agent systematically routes those to `engineering` or `urgent` across every variation. The agent's calls are defensible — the seed labels for "general" overlap with "engineering" for technically-flavored questions. Per-routing accuracy: urgent 25/25, engineering 25/25, billing 25/25, **general 12/25**. v0.2 wants either tighter seed-label criteria or an explicit fallback rule in the triage prompt.
+
+3. **The Wilson upper-CI thresholds (0.01 / 0.03) were too aggressive for n=100.** With 0 successes out of 100 trials, the 95% Wilson upper bound is mathematically 0.0370 — you'd need n≥300 to push it under 1% even with a perfect run. The pre-registered manifest is honest about the substrate (rates pass) but the CI half of the gate was uncalibrated. The right v0.2 move is bumping ci-nightly to n=300 *or* relaxing CI bounds to 0.04 with documented rationale — **not** silently re-tightening after seeing the data, which would defeat pre-registration discipline.
+
+The gate failing on ship is the playbook biting back as designed: the manifest was registered before the run; the run revealed a real composition gap and a real methodology calibration miss; both are documented rather than papered over. `manifest.json` stays at v1.0.0; v2.0.0 will bump n and recalibrate with the rationale in the PR body.
+
+What these numbers *don't* tell you, per Bean's construct-validity checklist (cited in `references/eval-methodology.md`): they only score the *worked example* fixtures, not the universe of agent workflows that might use these tools. They tell you the substrate is solid and one specific composition has a known label-boundary issue; they don't tell you "an arbitrary agent using `watch_table` will succeed." That's a generalization claim the harness deliberately doesn't make.
 
 ## 5. What's not in v1 and why
 
@@ -111,7 +114,8 @@ Both findings are *operational discipline shipped with the artifact* — agents 
 
 ## Next steps
 
-- Restore Anthropic auth and run ci-nightly to populate the eval-results table
+- Investigate the `general` label-boundary issue (3/5 seeds systematically misrouted to `engineering`/`urgent`) — either tighten seed-label criteria or add a fallback rule in the triage prompt
+- Bump ci-nightly to n=300 (or relax CI thresholds to ~0.04 with PR-body rationale) — pre-registered manifest stays at v1.0.0; recalibration happens via versioned bump in v2.0.0
 - Wire `StreamableHTTPServerTransport` in the Edge Function entry so live MCP tool-calls work end-to-end
 - Open issue on [`supabase/agent-skills`](https://github.com/supabase/agent-skills/issues) proposing this as a `realtime` sub-skill
 - v2 design pass on Presence semantics for agents
