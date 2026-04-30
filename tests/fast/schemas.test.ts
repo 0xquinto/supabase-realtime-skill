@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { WatchTableInputSchema } from "../../src/types/schemas.ts";
+import {
+  BroadcastInputSchema,
+  DescribeTableInputSchema,
+  ListChannelsInputSchema,
+  SubscribeChannelInputSchema,
+  WatchTableInputSchema,
+} from "../../src/types/schemas.ts";
 
 describe("WatchTableInputSchema", () => {
   it("accepts a minimal valid input", () => {
@@ -54,5 +60,47 @@ describe("WatchTableInputSchema", () => {
       predicate: { event: "INSERT", filter: { column: "status", op: "match", value: "open" } },
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("BroadcastInputSchema", () => {
+  it("accepts a valid broadcast", () => {
+    const r = BroadcastInputSchema.safeParse({
+      channel: "agent:triage:urgent",
+      event: "ticket-routed",
+      payload: { ticket_id: "abc" },
+    });
+    expect(r.success).toBe(true);
+  });
+  it("rejects payload over 32KB", () => {
+    const big = { x: "a".repeat(33_000) };
+    const r = BroadcastInputSchema.safeParse({ channel: "c", event: "e", payload: big });
+    expect(r.success).toBe(false);
+  });
+});
+
+describe("SubscribeChannelInputSchema", () => {
+  it("applies bounded-subscription defaults like watch_table", () => {
+    const r = SubscribeChannelInputSchema.parse({ channel: "c" });
+    expect(r.timeout_ms).toBe(60_000);
+    expect(r.max_events).toBe(50);
+  });
+  it("caps timeout_ms at 120000", () => {
+    expect(
+      SubscribeChannelInputSchema.safeParse({ channel: "c", timeout_ms: 120_001 }).success,
+    ).toBe(false);
+  });
+});
+
+describe("ListChannelsInputSchema", () => {
+  it("accepts an empty object", () => {
+    expect(ListChannelsInputSchema.safeParse({}).success).toBe(true);
+  });
+});
+
+describe("DescribeTableInputSchema", () => {
+  it("requires a table", () => {
+    expect(DescribeTableInputSchema.safeParse({}).success).toBe(false);
+    expect(DescribeTableInputSchema.safeParse({ table: "support_tickets" }).success).toBe(true);
   });
 });
