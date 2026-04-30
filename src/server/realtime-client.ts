@@ -68,6 +68,7 @@ export interface SupabaseAdapterConfig {
   supabaseKey: string;
   authToken?: string; // forwarded as Authorization header for RLS
   schema?: string; // default "public"
+  subscribeTimeoutMs?: number; // default 10_000
 }
 
 /**
@@ -123,14 +124,16 @@ export function makeSupabaseAdapter(table: string, cfg: SupabaseAdapterConfig): 
         },
       );
       await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("subscribe timeout")), 10_000);
+        const subscribeTimeoutMs = cfg.subscribeTimeoutMs ?? 10_000;
+        const timer = setTimeout(() => reject(new Error("subscribe timeout")), subscribeTimeoutMs);
         channel?.subscribe((status) => {
           if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
             clearTimeout(timer);
             resolve();
           } else if (
             status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR ||
-            status === REALTIME_SUBSCRIBE_STATES.TIMED_OUT
+            status === REALTIME_SUBSCRIBE_STATES.TIMED_OUT ||
+            status === REALTIME_SUBSCRIBE_STATES.CLOSED
           ) {
             clearTimeout(timer);
             reject(new Error(`subscribe failed: ${status}`));
