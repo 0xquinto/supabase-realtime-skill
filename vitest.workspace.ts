@@ -16,6 +16,7 @@ export default defineWorkspace([
       environment: "node",
       testTimeout: 240_000,
       hookTimeout: 240_000,
+      setupFiles: ["tests/setup-env.ts"],
     },
   },
 ]);
