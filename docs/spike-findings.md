@@ -129,3 +129,32 @@ What the corrected reshape ships:
 - The `/sse` branch is deleted from the Edge Function entry (the secondary concern above). `StreamableHTTPServerTransport` rewire remains deferred to a later task.
 
 The original analysis above is preserved as the trail of reasoning — Option 1's *cost* assessment ("touches ~15 files; mechanical") was accurate; only the extension choice needed correction.
+
+---
+
+# Phase 1 spike-success gate — PASSED (2026-04-30)
+
+All five gate items from the plan §1531-1541 verified:
+
+| # | Gate item | Result |
+|---|---|---|
+| 1 | `bun run test:fast` — schemas + watch-table + realtime-client | 13/13 pass, 189ms |
+| 2 | `bun run test:smoke` — single-trial against a real Pro branch | 1/1 pass, 32.3s wallclock; steady-state latency **98 ms** |
+| 3 | `bun run eval/spike-latency.ts` — n=20 long-lived-subscription trials | **p50 145.9 ms / p95 438.1 ms / p99 708.5 ms** — PASS (4.6× under the 2000 ms threshold) |
+| 4 | Edge Function deploys + `GET /functions/v1/mcp` returns 200 | Deployed to host project; `curl` returns HTTP/2 200 |
+| 5 | `references/predicates.md` + `references/replication-identity.md` committed | Done |
+
+The architecture (long-lived Realtime subscription on Supabase Pro branch via service_role key, exposed as a bounded primitive through an Edge Function MCP server) is viable. Proceed to Phase 2 — mechanical scale-out of the remaining four tools.
+
+## Methodology constraints carried forward
+
+Two findings from the spike change how Phase 2/3 work must be designed:
+
+1. **Subscription warm-up window (T7).** Any test or eval that times "subscribe → insert → match" from a fresh subscription must either (a) discard the first event after subscribe-resolve, or (b) bake a warm-up insert into setup. The spike-latency eval's long-lived design is the canonical pattern; Phase 2 smoke tests should follow it where they need to measure latency rather than just functional correctness.
+
+2. **`.ts`-extension import discipline (T8).** Every new file under `src/`, `vendor/`, `tests/`, `supabase/functions/` must import relatively with `.ts`. Bare specifiers stay bare; deno.json gets a new `npm:` alias when a new bare specifier shows up. Worked example: the four tools added in Phase 2 will each need the matching alias if they pull in new SDK surface area.
+
+## Headroom
+
+The 4.6× p95 headroom (438 ms vs 2000 ms threshold) means Phase 2 can layer a few hundred ms of additional work per tool call (RLS check, schema introspection, Edge Function cold-start tax) without breaching the spec target. There's no engineering pressure to optimize the bounded primitive itself; the budget is for the surrounding tool surface.
+
