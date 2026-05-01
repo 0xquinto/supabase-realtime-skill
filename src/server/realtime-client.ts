@@ -160,6 +160,11 @@ export async function boundedWatch(input: BoundedWatchInput): Promise<WatchTable
 
   const onEvent = (ev: ChangeEvent) => {
     if (!matchesEvent(ev, input.predicate)) return;
+    // Hard cap: max_events is the max events stored, regardless of how the
+    // adapter delivers them. Without this guard, a synchronous burst (or a
+    // websocket frame carrying multiple changes) overflows the cap because
+    // unsubscribe doesn't run until after Promise.race resolves.
+    if (events.length >= input.max_events) return;
     events.push(ev);
     if (events.length >= input.max_events && resolveOnEvent) {
       resolveOnEvent("max_events");

@@ -92,16 +92,78 @@ export interface BoundedQueueDrainOutput {
   closed_reason: "max_events" | "timeout";
 }
 
-const NOT_IMPLEMENTED =
-  "boundedQueueDrain: contract scaffold landed; implementation pending fixtures-then-body per ADR-0010 § Migration steps 1→2. See docs/decisions/0010-bounded-queue-drain.md.";
-
+/**
+ * Single bounded drain pass. See file header for semantics.
+ *
+ * Counter rules (worth surfacing here because they're load-bearing for the
+ * `forward_correctness_rate_min` metric):
+ *   - `forwarded`     ↑  broadcast succeeded AND ack succeeded
+ *   - `dead_lettered` ↑  broadcast failed all retries AND dead_letter callback succeeded
+ *   - `failed`        ↑  any of: read_row threw, broadcast failed without DLQ,
+ *                        broadcast failed and DLQ callback threw, broadcast
+ *                        succeeded but ack threw (row will be re-forwarded
+ *                        next loop — at-least-once)
+ *
+ * No category overlaps. Sum equals `events.length` from boundedWatch.
+ */
 export async function boundedQueueDrain(
-  _input: BoundedQueueDrainInput,
+  input: BoundedQueueDrainInput,
 ): Promise<BoundedQueueDrainOutput> {
-  // Suppress "imported but unused" until the body lands. These imports are
-  // load-bearing for the contract and the implementation will use them on
-  // the next commit; pulling them out now would just reshuffle the diff.
-  void boundedWatch;
-  void handleBroadcast;
-  throw new Error(NOT_IMPLEMENTED);
+  const { events, closed_reason } = await boundedWatch({
+    adapter: input.adapter,
+    table: input.table,
+    predicate: input.predicate ?? { event: "INSERT" },
+    timeout_ms: input.timeout_ms,
+    max_events: input.max_events,
+  });
+
+  let forwarded = 0;
+  let dead_lettered = 0;
+  let failed = 0;
+
+  for (const ev of events) {
+    let row: QueueRow;
+    try {
+      row = input.read_row(ev);
+    } catch {
+      failed++;
+      continue;
+    }
+
+    let broadcastError: unknown = null;
+    try {
+      await handleBroadcast(
+        { channel: row.destination, event: row.event, payload: row.payload },
+        { sender: input.sender },
+      );
+    } catch (err) {
+      broadcastError = err;
+    }
+
+    if (broadcastError !== null) {
+      if (input.dead_letter) {
+        try {
+          await input.dead_letter(ev, row, broadcastError);
+          dead_lettered++;
+        } catch {
+          failed++;
+        }
+      } else {
+        failed++;
+      }
+      continue;
+    }
+
+    try {
+      await input.ack(ev, row);
+      forwarded++;
+    } catch {
+      // Broadcast succeeded but ack failed. At-least-once contract: the row
+      // will be observed and re-forwarded on the next drain loop. Bucketed
+      // as `failed` so the operator's metric reflects the un-acked state.
+      failed++;
+    }
+  }
+
+  return { forwarded, dead_lettered, failed, closed_reason };
 }
