@@ -2,8 +2,8 @@
   "id": "qd007-mixed-success-and-poison",
   "description": "Three rows: row-good-1 succeeds, row-poison fails permanently → DLQ, row-good-2 succeeds. Verifies the loop doesn't abort on a single poison row mid-drain — remaining rows still drain and the failure is isolated to the affected row.",
   "drain_config": {
-    "timeout_ms": 5000,
-    "max_events": 5,
+    "timeout_ms": 30000,
+    "max_events": 3,
     "dead_letter_provided": true
   },
   "rows_arriving": [
@@ -33,6 +33,6 @@
     "forwarded": 2,
     "dead_lettered": 1,
     "failed": 0,
-    "closed_reason_one_of": ["timeout", "max_events"]
+    "closed_reason_one_of": ["max_events"]
   }
 }
