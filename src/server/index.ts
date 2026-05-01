@@ -33,3 +33,14 @@ export type { ListChannelsDeps, ChannelRegistryEntry } from "./list-channels.ts"
 
 export { handleDescribeTable } from "./describe-table.ts";
 export type { DescribeTableDeps, TableIntrospection } from "./describe-table.ts";
+
+// --- Deterministic composition modules -------------------------------------
+// boundedQueueDrain composes boundedWatch + handleBroadcast + a caller-
+// supplied ack callback to drain a queue/outbox table in a single bounded
+// pass. ADR-0010 (Proposed). Body lands behind fixtures.
+export { boundedQueueDrain } from "./queue-drain.ts";
+export type {
+  BoundedQueueDrainInput,
+  BoundedQueueDrainOutput,
+  QueueRow,
+} from "./queue-drain.ts";

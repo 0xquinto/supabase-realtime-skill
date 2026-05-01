@@ -1,0 +1,48 @@
+{
+  "id": "qd006-max-events-cap-respected",
+  "description": "Five rows arrive but max_events=2. Module forwards exactly the first 2 rows, then closes with closed_reason=max_events. Remaining 3 rows stay in the queue (the module never observes them because boundedWatch's hard cap stops the listener after max_events). Verifies the safety budget is honored.",
+  "drain_config": {
+    "timeout_ms": 5000,
+    "max_events": 2,
+    "dead_letter_provided": true
+  },
+  "rows_arriving": [
+    {
+      "id": "row-1",
+      "destination": "agent:triage-handoff",
+      "event_type": "ticket.created",
+      "payload": { "ticket_id": "t-101" }
+    },
+    {
+      "id": "row-2",
+      "destination": "agent:triage-handoff",
+      "event_type": "ticket.created",
+      "payload": { "ticket_id": "t-102" }
+    },
+    {
+      "id": "row-3",
+      "destination": "agent:triage-handoff",
+      "event_type": "ticket.created",
+      "payload": { "ticket_id": "t-103" }
+    },
+    {
+      "id": "row-4",
+      "destination": "agent:triage-handoff",
+      "event_type": "ticket.created",
+      "payload": { "ticket_id": "t-104" }
+    },
+    {
+      "id": "row-5",
+      "destination": "agent:triage-handoff",
+      "event_type": "ticket.created",
+      "payload": { "ticket_id": "t-105" }
+    }
+  ],
+  "broadcast_behavior": "always_success",
+  "expected_end_state": {
+    "forwarded": 2,
+    "dead_lettered": 0,
+    "failed": 0,
+    "closed_reason_one_of": ["max_events"]
+  }
+}

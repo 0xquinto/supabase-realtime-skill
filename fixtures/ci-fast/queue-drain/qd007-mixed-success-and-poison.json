@@ -1,0 +1,38 @@
+{
+  "id": "qd007-mixed-success-and-poison",
+  "description": "Three rows: row-good-1 succeeds, row-poison fails permanently → DLQ, row-good-2 succeeds. Verifies the loop doesn't abort on a single poison row mid-drain — remaining rows still drain and the failure is isolated to the affected row.",
+  "drain_config": {
+    "timeout_ms": 30000,
+    "max_events": 3,
+    "dead_letter_provided": true
+  },
+  "rows_arriving": [
+    {
+      "id": "row-good-1",
+      "destination": "slack:eng",
+      "event_type": "deploy.started",
+      "payload": { "service": "api" }
+    },
+    {
+      "id": "row-poison",
+      "destination": "slack:dead-channel",
+      "event_type": "deploy.started",
+      "payload": { "service": "api" }
+    },
+    {
+      "id": "row-good-2",
+      "destination": "slack:eng",
+      "event_type": "deploy.completed",
+      "payload": { "service": "api", "duration_ms": 5500 }
+    }
+  ],
+  "broadcast_behavior": {
+    "permanently_fail_destinations": ["slack:dead-channel"]
+  },
+  "expected_end_state": {
+    "forwarded": 2,
+    "dead_lettered": 1,
+    "failed": 0,
+    "closed_reason_one_of": ["max_events"]
+  }
+}

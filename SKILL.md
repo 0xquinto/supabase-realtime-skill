@@ -67,6 +67,39 @@ Why not a persistent WebSocket? The agent's tool-call boundary *is* the natural 
 
 Five tools. No Presence in v1 — see `references/presence-deferred.md` for why.
 
+## Composition modules
+
+These are **not MCP tools**; they're library-level functions exported from `supabase-realtime-skill/server` for code that wants the bounded primitives composed with safety nets the agent shouldn't have to re-derive.
+
+### `boundedQueueDrain` — drain a queue/outbox table in one bounded pass
+
+**IMPORTANT: at-least-once.** Each row may be forwarded more than once if the broadcast succeeds but the ack callback fails. Subscribers MUST be idempotent.
+
+Composes `boundedWatch` (the `watch_table` body) + `handleBroadcast` (with its 3-retry envelope) + a caller-supplied `ack` callback (canonical: SQL `update queue set forwarded_at = now() where id = ...`) + an optional `dead_letter` callback. One drain pass: arrive → broadcast → ack, capped at `max_events` and `timeout_ms` to fit Edge Function isolate budgets.
+
+```ts
+import { boundedQueueDrain, makeSupabaseAdapter } from "supabase-realtime-skill/server";
+
+const result = await boundedQueueDrain({
+  adapter: makeSupabaseAdapter("outbox", { supabaseUrl, supabaseKey }),
+  table: "outbox",
+  read_row: (ev) => {
+    const row = ev.new as { destination: string; event_type: string; payload: Record<string, unknown> };
+    return { destination: row.destination, event: row.event_type, payload: row.payload };
+  },
+  ack: async (ev) => sql`update outbox set forwarded_at = now() where id = ${(ev.new as { id: string }).id}`,
+  dead_letter: async (ev, _row, err) => sql`insert into dlq (id, payload, error) values (${(ev.new as { id: string }).id}, ${ev.new}::jsonb, ${String(err)})`,
+  sender: yourBroadcastSender,
+  timeout_ms: 60_000,
+  max_events: 25,
+});
+// result: { forwarded, dead_lettered, failed, closed_reason }
+```
+
+Categories partition the events array — `forwarded + dead_lettered + failed === events.length`. Filed against ADR-0010 (Proposed): [`docs/decisions/0010-bounded-queue-drain.md`](docs/decisions/0010-bounded-queue-drain.md). Reference page upgrade pending.
+
+**Don't** use this when ordering across destinations matters (Realtime broadcast is fire-and-forget; per-destination FIFO needs a different shape) or when subscribers can't be made idempotent (run a consumer-side inbox table — out of scope for v0.2.0).
+
 ## Worked example: support-ticket triage
 
 A SaaS app has a `support_tickets` table. Tickets get auto-embedded via Supabase Automatic Embeddings (writes a `halfvec(1536)` to `embedding`). The triage agent watches for new tickets, retrieves the most-similar past resolved tickets via pgvector, decides routing, writes the routing back, and broadcasts a `ticket-routed` event so a downstream handoff agent picks it up.

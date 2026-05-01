@@ -1,0 +1,26 @@
+{
+  "id": "qd003-poison-row-no-dlq-counted-failed",
+  "description": "Same poison-row scenario as qd002 but no dead_letter callback is provided. Module retries 3× via handleBroadcast, then increments the `failed` counter (row remains un-acked; would be retried on next drain loop). Final state: 0 forwarded, 0 dead_lettered, 1 failed.",
+  "drain_config": {
+    "timeout_ms": 5000,
+    "max_events": 5,
+    "dead_letter_provided": false
+  },
+  "rows_arriving": [
+    {
+      "id": "row-poison",
+      "destination": "webhook:returns-503-forever",
+      "event_type": "audit.entry",
+      "payload": { "actor": "u-1", "action": "noop" }
+    }
+  ],
+  "broadcast_behavior": {
+    "permanently_fail_destinations": ["webhook:returns-503-forever"]
+  },
+  "expected_end_state": {
+    "forwarded": 0,
+    "dead_lettered": 0,
+    "failed": 1,
+    "closed_reason_one_of": ["timeout"]
+  }
+}
