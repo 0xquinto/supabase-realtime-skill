@@ -1,5 +1,7 @@
 # References — Outbox forwarder: a non-LLM worked example
 
+> **Status note (2026-05-01):** A Proposed promotion of this pattern to a typed module (`boundedQueueDrain`) is on the table — see [ADR-0010](../docs/decisions/0010-bounded-queue-drain.md). The current page documents composition-by-hand; if ADR-0010 is Accepted, this page is replaced by `references/queue-drain.md` with a typed contract surface, optional `dead_letter_table` parameter, and a manifest-gated eval.
+
 A second worked example that exercises the bounded-subscription primitive **without** an LLM in the loop. The triage agent (`worked-example.md`) shows the substrate composing with pgvector + LLM routing; this one shows it composing with plain Postgres + Broadcast for fan-out, proving the substrate generalizes beyond AI-shaped use cases.
 
 ## The pattern
