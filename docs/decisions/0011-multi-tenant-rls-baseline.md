@@ -8,7 +8,7 @@
 - Smoke test: shipped in this PR — [`tests/smoke/multi-tenant-rls.smoke.test.ts`](../../tests/smoke/multi-tenant-rls.smoke.test.ts).
 - `setAuth` fix: shipped in this PR — three call sites in [`src/server/realtime-client.ts`](../../src/server/realtime-client.ts) (lines 90-104, 282-289) + [`src/server/server.ts`](../../src/server/server.ts) (lines 119-132).
 - FAIL baseline (pre-fix run, 2026-05-01): `events_count=0` after 30s timeout. User A subscribed under JWT_A received zero events — including their own three tenant_a inserts. Confirms the recon's prediction that supabase-js' default `_getAccessToken` falls back to `supabaseKey` (anon key) on the websocket leg.
-- PASS receipt (post-fix run, 2026-05-01): `events_count=2`, both events tagged `tenant_id=tenant_a`, zero cross-tenant events. Both assertions pass — diagnostic (own-tenant events arrive) and contract (cross-tenant events blocked).
+- PASS receipt (post-fix run, 2026-05-01): `events_count=2/3` own-tenant inserts (the +1166ms `warmup_a1` insert was *dropped by* the documented 5s Realtime warmup window — same window flagged in `docs/spike-findings.md` § T7); both delivered events tagged `tenant_id=tenant_a`; zero cross-tenant events. Both assertions pass — diagnostic (own-tenant events arrive: `≥1`) and contract (cross-tenant events blocked: `===0`).
 - Total: ~6 min of branch-provisioning + ~2 min of test wallclock for the round-trip evidence.
 
 **Note on versioning:** this repo runs **two parallel version streams**: the npm package (`package.json` — currently `0.1.1`; this ADR doesn't propose a version bump because the fix is a bug-correction in `0.1.x` shape, not a new feature) and `manifest.json` eval thresholds (currently `1.0.0`; this ADR proposes amending the pre-staged `2.0.0` design from [ADR-0007](0007-pre-stage-v2-manifest-design.md) with one new cell, deferred to ADR-0012's worked-example ship). When this ADR says **"npm v0.1.x"** it means the published package; **"manifest.json v2.0.0"** means the eval-thresholds file. Bare references in older ADRs may conflate the two; first mentions are disambiguated.
@@ -82,7 +82,7 @@ This is identical to pre-fix behavior for the no-token case. The deferred design
 ## What this ADR doesn't do
 
 - **Doesn't ship a worked example.** The audit-log schema, the `references/multi-tenant-rls.md` page, the `cross_tenant_leakage_rate_max` manifest cell, and the multi-tenant fixture corpus all live in ADR-0012. This ADR is the bug-fix-with-receipts ship; the worked-example ship is its follow-up.
-- **Doesn't change the `manifest.json`.** ADR-0007's pre-staged v2.0.0 design already commits to a templated amendment shape; ADR-0012 will pre-stage one new cell against it.
+- **Doesn't change the `manifest.json`.** ADR-0007's pre-staged v2.0.0 design already commits to a templated amendment shape; ADR-0012 will pre-stage one new cell against it. Note this will be the **second** amendment to ADR-0007's v2.0.0 design — ADR-0010's `forward_correctness_rate_min` is the first (currently Proposed → ready for promotion). The amendment loop ADR-0007 set up was always designed to take more than one cell over the artifact's lifecycle; ADR-0012 is the second exercise of that loop, not the first.
 - **Doesn't bump npm.** Bug-fix in `0.1.x`. The next npm release (`0.2.0`) ships with the worked example.
 - **Doesn't address Presence.** Per the recon's open question 4, Presence stays deferred — the v0.1.x judgment about what to defer holds. Same `setAuth` mechanism would apply if Presence were re-scoped in.
 
