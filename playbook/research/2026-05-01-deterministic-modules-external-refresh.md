@@ -2,6 +2,8 @@
 
 **Purpose:** Durable record of the 5-min refresh sweep that fed ADR-0010. Mirrors the supabase-mcp-evals pre-registered-targets pattern: searches run, what was checked, what landed in the ADR, and what's still open. Audit trail so the ADR's external-claims section can be re-derived without re-running the searches.
 
+> **Note on versioning:** bare `v0.2` / `v0.3` references in this doc are **npm package** versions; `v2.0.0` references are the **`manifest.json`** eval-thresholds file. Two parallel streams — disambiguation at [ADR-0010 § Note on versioning](../../docs/decisions/0010-bounded-queue-drain.md).
+
 **Frame:** Pre-recon ([`docs/recon/2026-05-01-deterministic-modules-recon.md`](../../docs/recon/2026-05-01-deterministic-modules-recon.md)) flagged three open questions for "the ADR pass to refresh." This file captures that refresh.
 
 ---

@@ -3,9 +3,11 @@
 **Date:** 2026-05-01
 **Status:** Proposed (design locked; ships when the n=300 fixture corpus lands)
 **Decider:** Diego Gomez
-**Context:** ADR-0001 deferred Wilson CI calibration to a v2.0.0 manifest with rationale: at n=100, the CI upper bounds for `missed_events` and `spurious_trigger` (0.01 and 0.03 respectively) are mathematically unreachable even with a perfectly clean substrate (rate = 0/100 yields Wilson upper ≈ 0.0370 at 95% confidence). The two CI cells stay in FAIL state in v0.1.x by deliberate design — pre-registration discipline holds.
+**Amendments:** [ADR-0010](0010-bounded-queue-drain.md) proposes adding `forward_correctness_rate_min` + `forward_correctness_ci_low_min` cells to this manifest (also Proposed — would land atomically with the v0.2.0 npm release).
+**Note on versioning:** "v2.0.0" throughout this ADR refers to **`manifest.json` v2.0.0** (the eval-thresholds file), not npm package v2.0.0. The two streams are independently versioned — see [ADR-0001](0001-manifest-v1-stays-uncalibrated.md) for why. Current state: `manifest.json` v1.0.0 ships with npm v0.1.1.
+**Context:** ADR-0001 deferred Wilson CI calibration to a `manifest.json` v2.0.0 with rationale: at n=100, the CI upper bounds for `missed_events` and `spurious_trigger` (0.01 and 0.03 respectively) are mathematically unreachable even with a perfectly clean substrate (rate = 0/100 yields Wilson upper ≈ 0.0370 at 95% confidence). The two CI cells stay in FAIL state in v0.1.x by deliberate design — pre-registration discipline holds.
 
-This ADR locks the v2.0.0 design without yet committing the file (the n=300 fixture corpus and its synthesizer pass need to land first; ADR-0001 estimated cost at $6-9 per nightly run for n=300, plus initial corpus synthesis cost).
+This ADR locks the `manifest.json` v2.0.0 design without yet committing the file (the n=300 fixture corpus and its synthesizer pass need to land first; ADR-0001 estimated cost at $6-9 per nightly run for n=300, plus initial corpus synthesis cost).
 
 ## The math against which v2.0.0 is calibrated
 

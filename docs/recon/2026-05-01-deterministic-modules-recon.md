@@ -2,6 +2,8 @@
 
 Pre-draft recon for adding a callable deterministic module on top of the existing `boundedWatch` primitive. Mirrors the shape of [`docs/upstream/recon/2026-05-01-pre-t31-engagement-recon.md`](../upstream/recon/2026-05-01-pre-t31-engagement-recon.md) — evidence first, ADR later. Filed on branch `explore/deterministic-modules`.
 
+> **Note on versioning:** this doc uses bare `v0.2` / `v0.3` / `v2.0.0` references that mix two parallel streams — the npm package version and `manifest.json` eval-thresholds version. Disambiguation lives in [ADR-0010 § Note on versioning](../decisions/0010-bounded-queue-drain.md). In short: `v0.2` / `v0.3` here are **npm releases**; `v2.0.0` is the **manifest.json** version pre-staged in [ADR-0007](../decisions/0007-pre-stage-v2-manifest-design.md).
+
 ## Why this recon, why now
 
 Coming out of the v0.1.x ship, the artifact has **one substrate primitive** (`boundedWatch`) and **one worked example** (the support-ticket triage agent). The `outbox-forwarder` is documented but lives as composition-by-hand in [`references/outbox-forwarder.md`](../../references/outbox-forwarder.md). The thesis the artifact already defends — *agents earn their keep at the boundary, the substrate should swallow the interior of well-defined operations* — extrapolates naturally to a second tier: lifting recurring composition patterns from "documented example" to "callable module with a falsifiable contract."

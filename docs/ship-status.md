@@ -86,6 +86,10 @@ Or skip npm for now and consume the package directly from GitHub (`bun add githu
 
 Plan T31 has the full issue body draft. Repo is now public, so URLs resolve. Filing is the operator's call.
 
+### 6. ADR-0010 decision — `boundedQueueDrain` second-module proposal
+
+[ADR-0010](decisions/0010-bounded-queue-drain.md) is filed Proposed (PR #1) with a recon, an external-research-refresh audit trail, and locked design choices for promoting the outbox-forwarder pattern to a typed module. The decision the operator owns: **Accept** (build v0.2.0 — fixtures, module, reference page, ADR-0007 manifest amendment), **Partial-Accept** (e.g., reference-page upgrade only without module promotion), or **Reject** (one-module artifact stands as v0.1.x). No code or fixtures land until decided.
+
 ## Known gaps for v0.2
 
 - **Type emission.** v0.1.0 ships JS without `.d.ts` files. Bun's bundler doesn't emit declarations, and adding a `tsc -d` pass requires unwinding `allowImportingTsExtensions: true`. Documented in T30 Step 1's commit message.
