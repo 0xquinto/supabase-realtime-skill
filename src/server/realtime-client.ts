@@ -91,6 +91,17 @@ export function makeSupabaseAdapter(table: string, cfg: SupabaseAdapterConfig): 
     clientOpts.global = { headers: { Authorization: `Bearer ${cfg.authToken}` } };
   }
   const client: SupabaseClient = createClient(cfg.supabaseUrl, cfg.supabaseKey, clientOpts);
+  // global.headers.Authorization flows to PostgREST but NOT to the Realtime
+  // websocket — supabase-js' default _getAccessToken falls back to supabaseKey
+  // (the anon key) when there's no persisted session, which is always the case
+  // in Edge Function isolates. realtime.setAuth() overrides accessTokenValue
+  // on the underlying RealtimeClient. Without this, RLS on Postgres-Changes
+  // evaluates against the anon claims_role even when authToken is set.
+  // See SupabaseClient.ts:307-340 + 534-541; smoke test in
+  // tests/smoke/multi-tenant-rls.smoke.test.ts demonstrates the gap.
+  if (cfg.authToken) {
+    client.realtime.setAuth(cfg.authToken);
+  }
   const channelName = `realtime:${schema}:${table}`;
   let channel: RealtimeChannel | null = null;
 
@@ -273,6 +284,12 @@ export function makeSupabaseBroadcastAdapter(cfg: SupabaseAdapterConfig): Broadc
     clientOpts.global = { headers: { Authorization: `Bearer ${cfg.authToken}` } };
   }
   const client: SupabaseClient = createClient(cfg.supabaseUrl, cfg.supabaseKey, clientOpts);
+  // See identical setAuth note above on makeSupabaseAdapter — Broadcast
+  // Authorization on private channels also reads the JWT off the websocket,
+  // so the same fix applies here.
+  if (cfg.authToken) {
+    client.realtime.setAuth(cfg.authToken);
+  }
   let channel: RealtimeChannel | null = null;
 
   return {

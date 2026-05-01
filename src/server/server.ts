@@ -123,6 +123,14 @@ export function makeServer(cfg: ServerConfig): Server {
   // client (channel-name reuse). Acceptable for v1 single-tenant deploys;
   // worth revisiting if we open multi-tenant.
   const supabaseClient = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, clientOpts);
+  // global.headers.Authorization doesn't propagate to the Realtime websocket;
+  // setAuth is required for Broadcast Authorization on private channels to
+  // evaluate RLS against the user's JWT instead of the anon claims_role.
+  // See src/server/realtime-client.ts for the load-bearing comment + smoke
+  // test in tests/smoke/multi-tenant-rls.smoke.test.ts.
+  if (cfg.authToken) {
+    supabaseClient.realtime.setAuth(cfg.authToken);
+  }
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOL_DEFS }));
 
