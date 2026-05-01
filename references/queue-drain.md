@@ -1,6 +1,6 @@
 # References — `boundedQueueDrain`: deterministic queue/outbox draining
 
-A typed deterministic module that composes [`watch_table`](predicates.md)'s body (`boundedWatch`) + [`broadcast_to_channel`](#)'s body (`handleBroadcast`, with its 3-retry envelope) + a caller-supplied SQL-ack callback. **One drain pass.** Bounded by `timeout_ms` and `max_events` so it fits Edge Function isolate budgets.
+A typed deterministic module that composes [`watch_table`](predicates.md)'s body (`boundedWatch`) + `broadcast_to_channel`'s body (`handleBroadcast`, with its 3-retry envelope) + a caller-supplied SQL-ack callback. **One drain pass.** Bounded by `timeout_ms` and `max_events` so it fits Edge Function isolate budgets.
 
 Promoted from the [outbox-forwarder pattern](outbox-forwarder.md) per [ADR-0010](../docs/decisions/0010-bounded-queue-drain.md). The pattern still works composed by hand; this module is the same shape with one entry point and a falsifiable contract.
 
@@ -74,11 +74,20 @@ async function drainOnce(opts: {
       // Optional but recommended in production. Persist failed-after-N rows
       // so the operator has a place to triage them. Without this, failed rows
       // stay un-acked and will be re-forwarded on every drain loop forever.
+      //
+      // Transaction is load-bearing: under at-least-once semantics, an INSERT
+      // → UPDATE pair without `sql.begin` can leave the row newly-DLQ'd in
+      // queue_dlq AND still un-acked in `queue` if the second statement fails.
+      // The next drain loop would then double-DLQ the same source_id. Either
+      // wrap both writes in one transaction (below) or add a unique index on
+      // queue_dlq.source_id and use `INSERT ... ON CONFLICT DO NOTHING`.
       dead_letter: async (ev, _row, err) => {
         const row = ev.new as { id: string; payload: unknown };
-        await sql`insert into queue_dlq (source_id, payload, error)
-                  values (${row.id}, ${JSON.stringify(row.payload)}::jsonb, ${String(err)})`;
-        await sql`update queue set forwarded_at = now() where id = ${row.id}`;  // remove from active queue
+        await sql.begin(async (tx) => {
+          await tx`insert into queue_dlq (source_id, payload, error)
+                   values (${row.id}, ${JSON.stringify(row.payload)}::jsonb, ${String(err)})`;
+          await tx`update queue set forwarded_at = now() where id = ${row.id}`;
+        });
       },
       sender: opts.sender,
       timeout_ms: 60_000,

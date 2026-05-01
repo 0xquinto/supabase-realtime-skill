@@ -100,7 +100,15 @@ function makeAdapter(): {
         event: "INSERT",
         table: "queue",
         schema: "public",
-        new: { ...(row as unknown as Record<string, unknown>), _row_id: row.id },
+        // Inject _row_id INTO payload (not at top level of `new`) so it flows
+        // through read_row's `payload: row.payload` extraction and lands in
+        // the sender's `input.payload._row_id` lookup. Mirrors the fast tests'
+        // pattern where fixture authors hand-place _row_id inside payload at
+        // construction time; runner fixtures don't, so the adapter injects it.
+        new: {
+          ...(row as unknown as Record<string, unknown>),
+          payload: { ...row.payload, _row_id: row.id },
+        },
         old: null,
         commit_timestamp: new Date().toISOString(),
       }),
