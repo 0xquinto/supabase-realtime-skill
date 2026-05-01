@@ -56,6 +56,16 @@ create index <your_table>_embedding_hnsw
 
 `halfvec(1536)` is the recommended Supabase Automatic Embeddings shape (April 2026) — half the storage of `vector(1536)` with negligible quality loss. Use HNSW over IVFFlat unless your dataset is >1M rows; HNSW indexes faster and has lower query latency in the typical agent-retrieval range.
 
+### A note on what this repo's eval actually runs
+
+The bundled eval harness (`eval/embed-corpus.mjs` + `eval/triage-agent.ts`) uses **`halfvec(384)` with the local `Xenova/all-MiniLM-L6-v2` sentence-transformer** instead of OpenAI 1536-dim. The reasoning: the harness must run end-to-end with zero external API dependencies (no OpenAI/Voyage key requirement), so the eval can be reproduced anywhere a transient Supabase branch can be created. The retrieval *pattern* is identical — `order by embedding <=> $query_embedding` — only the dimension and provider differ. Production deployments swapping in OpenAI 1536-dim need only:
+
+1. Bump the column to `halfvec(1536)` in the migration
+2. Replace the Transformers.js call in `eval/embed-corpus.mjs` with the OpenAI embeddings API
+3. Wire Automatic Embeddings (or the equivalent) in production so the embedding column populates async on INSERT
+
+The harness pre-computes embeddings into `fixtures/embeddings.json` rather than embedding at trial-time. This makes the eval deterministic across runs (same vectors → same retrieval order → same LLM context) and removes embedding-API latency from the measurement.
+
 ## See also
 
 - `references/replication-identity.md` — UPDATE events need `REPLICA IDENTITY FULL` if you want the old row.

@@ -18,7 +18,7 @@ The Skill+MCP paired form factor matters here. The Skill (`SKILL.md` + `referenc
 
 ## 2. Worked example: support-ticket triage
 
-A SaaS app has a `support_tickets` table. Tickets get auto-embedded via Supabase Automatic Embeddings (writes a `halfvec(1536)` to `embedding`). The triage agent watches the table for embedded-ready tickets, retrieves the most-similar past resolved tickets via pgvector, decides routing (`urgent | engineering | billing | general`), writes the routing back, and broadcasts a `ticket-routed` event so a downstream handoff agent picks it up.
+A SaaS app has a `support_tickets` table. Tickets get auto-embedded — production via Supabase Automatic Embeddings to `halfvec(1536)`, the bundled eval via a pre-computed `halfvec(384)` cache so the harness has zero external API dependencies. Either way, the row arrives with an embedding. The triage agent watches the table, retrieves the most-similar past resolved tickets via pgvector cosine similarity, decides routing (`urgent | engineering | billing | general`), writes the routing back, and broadcasts a `ticket-routed` event so a downstream handoff agent picks it up.
 
 ```ts
 const adapter = makeSupabaseAdapter("support_tickets", { supabaseUrl, supabaseKey });
@@ -69,28 +69,30 @@ The composition is the headline. Each piece on its own is unremarkable. The Skil
 
 Pre-registered thresholds in `manifest.json` (version 1.0.0, registered 2026-04-30):
 
-| Metric | Threshold | Spike result | ci-nightly (n=100) | Gate |
-|---|---|---|---|---|
-| `latency_to_first_event_ms` p95 | < 2000ms | 438ms (n=20, single-trial) | **1520ms** (p50 1071ms) | PASS |
-| `missed_events_rate` | < 1% (CI high also < 1%) | — | **0%** (0/100; CI high 3.7%) | rate PASS, CI FAIL |
-| `spurious_trigger_rate` | < 2% (CI high < 3%) | — | **0%** (0/100; CI high 3.7%) | rate PASS, CI FAIL |
-| `agent_action_correctness` | ≥ 90% (CI low ≥ 85%) | — | **87%** (CI low 79%) | FAIL |
+| Metric | Threshold | Spike result | pre-pgvector (n=100) | post-pgvector (n=100) | Gate |
+|---|---|---|---|---|---|
+| `latency_to_first_event_ms` p95 | < 2000ms | 438ms (n=20, single-trial) | 1520ms | **1808ms** (p50 1048ms) | PASS |
+| `missed_events_rate` | < 1% (CI high < 1%) | — | 0% (CI high 3.7%) | **0%** (0/100; CI high 3.7%) | rate PASS, CI FAIL |
+| `spurious_trigger_rate` | < 2% (CI high < 3%) | — | 0% (CI high 3.7%) | **0%** (0/100; CI high 3.7%) | rate PASS, CI FAIL |
+| `agent_action_correctness` | ≥ 90% (CI low ≥ 85%) | — | 87% (CI low 79%) | **90%** (CI low 82.6%) | rate PASS, CI FAIL |
 
-Run: `eval/reports/ci-nightly-1777590748222.json`, single transient branch, ~30 min wallclock, 100 fixtures (20 hand-curated seeds × 5 variations each across 4 routings).
+Latest run: `eval/reports/ci-nightly-1777596701118.json`. Single transient branch, ~30 min wallclock, 100 fixtures (20 hand-curated seeds × 5 variations each across 4 routings), pgvector retrieval against a 32-row hand-curated resolved-tickets corpus seeded into the transient branch with pre-computed embeddings (Xenova/all-MiniLM-L6-v2, halfvec(384)).
 
-The spike-latency number is from `eval/spike-latency.ts` (committed `4f51800`): n=20 trials on a single long-lived subscription. The ci-nightly run uses the same long-lived-adapter discipline through the triage agent and reports a higher p95 because each trial includes the agent's tool-use loop (LLM call to claude-haiku-4-5 + retrieval + write-back), not just the event-delivery hop. Both numbers measure what they advertise; the substrate (Realtime delivery) is the smaller share of the 1520ms.
+The spike-latency number is from `eval/spike-latency.ts` (committed `4f51800`): n=20 trials on a single long-lived subscription. The ci-nightly p95 is higher because each trial includes the agent's full tool-use loop (LLM call to claude-haiku-4-5 + pgvector retrieval + write-back), not just the event-delivery hop. The substrate (Realtime delivery) is the smaller share.
 
-**Three real findings from the gate failure:**
+**Three findings from the v0.1.0 → v0.1.1 gate journey:**
 
-1. **The substrate is clean.** 0 missed events and 0 spurious triggers across 100 paired fixtures. The bounded-subscription primitive plus the production `makeSupabaseAdapter` did exactly what they should.
+1. **The substrate is clean.** 0 missed events and 0 spurious triggers across 100 paired fixtures, before and after the pgvector wiring. The bounded-subscription primitive plus the production `makeSupabaseAdapter` did exactly what they should. (The original v0.1.0 manifest registered no spike-result for missed/spurious because the eval runner hadn't shipped yet at registration time.)
 
-2. **The composition has a label-boundary gap.** All 13 misclassifications are concentrated in 3 of 5 `general` seeds (`f016` docs lookup, `f017` feature request, `f019` SSO question) and the agent systematically routes those to `engineering` or `urgent` across every variation. The agent's calls are defensible — the seed labels for "general" overlap with "engineering" for technically-flavored questions. Per-routing accuracy: urgent 25/25, engineering 25/25, billing 25/25, **general 12/25**. v0.2 wants either tighter seed-label criteria or an explicit fallback rule in the triage prompt.
+2. **The composition gap halved when retrieval started actually retrieving.** Pre-pgvector, the triage agent used recency-as-similarity against zero `status='resolved'` rows — retrieval contributed nothing, and 13/100 fixtures misrouted (87% accuracy, all errors in 3/5 `general` seeds: f016 docs, f017 feature request, f019 SSO). Post-pgvector — 32 hand-curated resolved tickets seeded with pre-computed embeddings, real cosine-similarity query — accuracy hit **90%** exactly. The f016 cluster (5 variations of "where are the docs for RLS policy") rescued: similar resolved tickets r025 ("where are the docs for RLS syntax") now retrieve and the LLM correctly tags `general`. The f017 (feature request) and f019 (SSO) clusters remain misrouted — the agent's calls are defensible (both ARE engineering-flavored) and likely need either prompt tightening or seed relabel in v0.2.
 
-3. **The Wilson upper-CI thresholds (0.01 / 0.03) were too aggressive for n=100.** With 0 successes out of 100 trials, the 95% Wilson upper bound is mathematically 0.0370 — you'd need n≥300 to push it under 1% even with a perfect run. The pre-registered manifest is honest about the substrate (rates pass) but the CI half of the gate was uncalibrated. The right v0.2 move is bumping ci-nightly to n=300 *or* relaxing CI bounds to 0.04 with documented rationale — **not** silently re-tightening after seeing the data, which would defeat pre-registration discipline.
+3. **The Wilson upper-CI thresholds (0.01 / 0.03) remain unreachable at n=100.** With 0 successes out of 100, the 95% Wilson upper bound is mathematically 0.0370 — independent of substrate quality. The action_correctness CI lower bound (0.826 vs 0.85 threshold) is also a Wilson-at-n issue: at n=100 with 90/100, lower bound is 0.826; at n=300 with 270/300, lower bound climbs to ~0.860 and passes. Pre-registered manifest stays at v1.0.0 (per ADR-0001); v2.0.0 bumps n to 300 and revisits CI bounds with disclosed rationale. **Rates all pass.**
 
-The gate failing on ship is the playbook biting back as designed: the manifest was registered before the run; the run revealed a real composition gap and a real methodology calibration miss; both are documented rather than papered over. `manifest.json` stays at v1.0.0; v2.0.0 will bump n and recalibrate with the rationale in the PR body.
+Per-routing accuracy (post-pgvector): urgent 25/25, engineering 25/25, billing 25/25, **general 15/25** (up from 12/25 pre-pgvector — the f016 rescue).
 
-What these numbers *don't* tell you, per Bean's construct-validity checklist (cited in `references/eval-methodology.md`): they only score the *worked example* fixtures, not the universe of agent workflows that might use these tools. They tell you the substrate is solid and one specific composition has a known label-boundary issue; they don't tell you "an arbitrary agent using `watch_table` will succeed." That's a generalization claim the harness deliberately doesn't make.
+The gate failing on ship is the playbook biting back as designed: pre-registered manifest registered before the run; the run revealed (a) substrate clean, (b) a real composition gap that fixing actually narrowed, and (c) a methodology calibration miss in CI bounds. All disclosed in the writeup rather than papered over by a silent threshold edit. The artifact ships discipline, not certainty.
+
+What these numbers *don't* tell you, per Bean's construct-validity checklist (cited in `references/eval-methodology.md`): they score the *worked example* fixtures against a hand-curated 32-ticket corpus, not the universe of agent workflows that might use these tools. They tell you the substrate is solid, that pgvector retrieval measurably improved one specific composition's accuracy, and that two `general` seeds (f017/f019) hit the boundary between "general question with technical flavor" and "engineering question." They don't tell you "an arbitrary agent using `watch_table` will succeed." That's a generalization claim the harness deliberately doesn't make.
 
 ## 5. What's not in v1 and why
 
@@ -114,12 +116,13 @@ Both findings are *operational discipline shipped with the artifact* — agents 
 
 ## Next steps
 
-- Investigate the `general` label-boundary issue (3/5 seeds systematically misrouted to `engineering`/`urgent`) — either tighten seed-label criteria or add a fallback rule in the triage prompt
-- Bump ci-nightly to n=300 (or relax CI thresholds to ~0.04 with PR-body rationale) — pre-registered manifest stays at v1.0.0; recalibration happens via versioned bump in v2.0.0
-- Wire `StreamableHTTPServerTransport` in the Edge Function entry so live MCP tool-calls work end-to-end
-- Open issue on [`supabase/agent-skills`](https://github.com/supabase/agent-skills/issues) proposing this as a `realtime` sub-skill
-- v2 design pass on Presence semantics for agents
-- Exploration of custom-channel-broker patterns once Broadcast usage is well-established
+- Investigate the f017 (feature-request) and f019 (SSO) `general` clusters — the remaining 10/100 misroutes after pgvector. Either tighten the triage prompt's "general" definition (default to `general` for non-incident, non-billing, non-blocking-engineering questions) or relabel f017/f019 to `engineering` and add new genuinely-`general` seeds.
+- Bump ci-nightly to n=300 — makes Wilson CI lower bound on action_correctness reachable (~0.860 at p̂=0.90) and tightens CI upper on missed/spurious to ~0.012. v2.0.0 manifest amendment with rationale; pre-registered v1.0.0 stays as-is per ADR-0001.
+- Ship `.d.ts` types — current `bun build` doesn't emit declarations, so npm consumers get `any`. Switch to `tsup` (or add a `tsc -d --emitDeclarationOnly` pass).
+- Live-deploy verification: `supabase functions deploy mcp` + curl JSON-RPC `tools/list` against the deployed function, paste transcript into this writeup.
+- Open issue on [`supabase/agent-skills`](https://github.com/supabase/agent-skills/issues) proposing this as a `realtime` sub-skill (after the public push so URLs resolve).
+- v2 design pass on Presence semantics for agents.
+- Exploration of custom-channel-broker patterns once Broadcast usage is well-established.
 
 ---
 

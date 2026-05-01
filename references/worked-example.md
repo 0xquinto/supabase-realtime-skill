@@ -6,7 +6,7 @@ End-to-end walkthrough of the worked example referenced in `SKILL.md`. The agent
 
 See `supabase/migrations/20260430000001_support_tickets.sql`. Highlights:
 
-- `embedding halfvec(1536)` populated by Supabase Automatic Embeddings (async; the agent never triggers it)
+- `embedding halfvec(384)` populated either by Supabase Automatic Embeddings (production; async; agent never triggers it) or pre-computed by the eval harness (`fixtures/embeddings.json` via `eval/embed-corpus.mjs`). Production deployments using OpenAI 1536-dim swap the column type and the embed call — see `references/pgvector-composition.md` § "A note on what this repo's eval actually runs".
 - HNSW index on the embedding for fast similarity search
 - `replica identity full` so UPDATE events carry the old row
 - Added to `supabase_realtime` publication
@@ -66,7 +66,13 @@ The pattern above watches for **the UPDATE that lands when Automatic Embeddings 
 
 ## Eval shape
 
-This worked example doubles as the regression-suite SUT (`eval/runner.ts`). The 4 metrics in `manifest.json` are computed against this loop running over fixtures in `fixtures/ci-fast/` and `fixtures/ci-nightly/`. See `references/eval-methodology.md`.
+This worked example doubles as the regression-suite SUT (`eval/runner.ts`). The 4 metrics in `manifest.json` are computed against this loop running over fixtures in `fixtures/ci-fast/` and `fixtures/ci-nightly/`. The eval harness:
+
+1. Generates embeddings for all fixtures + a hand-curated 32-row resolved-ticket corpus via `node eval/embed-corpus.mjs` (one-time; cached in `fixtures/embeddings.json`).
+2. On each transient branch: applies the migration, seeds the resolved corpus rows with their embeddings, fires a throwaway warm-up insert+watch pair to absorb the T7 5-second window, then runs each fixture as a trial.
+3. Per trial: arms `watch_table` for INSERT, inserts the new ticket WITH its pre-computed embedding, receives the event, runs the pgvector cosine query against the seeded resolved corpus (`order by embedding <=>`), passes top-5 into the LLM routing decision, writes routing back, returns telemetry.
+
+See `references/eval-methodology.md` for the metric definitions; see `references/pgvector-composition.md` for the design rationale.
 
 ## What this composition demonstrates
 
