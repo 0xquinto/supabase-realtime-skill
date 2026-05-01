@@ -3,7 +3,7 @@
 **Date:** 2026-05-01
 **Status:** Accepted with caveats — directional confirmation, magnitude predictions missed
 **Decider:** Diego Gomez
-**Context:** ADR-0002 documented the f019 seed relabel and named two v0.2 paths to address the f017 cluster (the remaining 5/100 systematic-miss source in ci-nightly):
+**Context:** ADR-0002 documented the f019 seed relabel and named two v0.2 paths to address the f017 cluster (the remaining 5/100 systematic-miss source in ci-full):
 
 > *"Plausible v0.2 paths: richer resolved corpus with technically-flavored `general` examples that bias retrieval correctly, or model swap from haiku-4-5 to a stronger router."*
 
@@ -31,7 +31,7 @@ The existing 8/8/8/8 routing balance becomes 8/8/8/11. The asymmetry is small an
 
 ## Pre-registered prediction
 
-**Primary:** f017 cluster misroute count drops from 5/100 → ≤2/100. Equivalently: ci-nightly `agent_action_correctness` rises from 94/100 (rate 0.94, CI low 0.875) to ≥97/100 (rate ≥0.97, CI low ≥0.92). **Falsifiable.**
+**Primary:** f017 cluster misroute count drops from 5/100 → ≤2/100. Equivalently: ci-full `agent_action_correctness` rises from 94/100 (rate 0.94, CI low 0.875) to ≥97/100 (rate ≥0.97, CI low ≥0.92). **Falsifiable.**
 
 **Secondary (no-regression):** Other routings hold steady or improve. Per-routing `urgent` stays at 25/25, `engineering` stays at 29/30 (or improves to 30/30 if any f017-adjacent engineering misroutes shift correctly), `billing` stays at 25/25.
 
@@ -45,7 +45,7 @@ The existing 8/8/8/8 routing balance becomes 8/8/8/11. The asymmetry is small an
 
 ## Methodology guardrails (anti-pattern checks)
 
-- **Pre-registration honored:** This ADR is committed BEFORE the eval runs. Result will be appended to a Status: Accepted (or Rejected) addendum after ci-nightly completes.
+- **Pre-registration honored:** This ADR is committed BEFORE the eval runs. Result will be appended to a Status: Accepted (or Rejected) addendum after ci-full completes.
 - **No fixture relabeling:** f017 stays `general`. The intervention is corpus enrichment, not ground-truth modification.
 - **No threshold modification:** `manifest.json` v1.0.0 is unchanged. The intervention either improves measured `agent_action_correctness` against the existing gates or it doesn't.
 - **Falsifiable failure modes named in advance:** Three explicit "what would falsify" conditions above. If the result hits any of them, this ADR closes as Rejected (not "soft success / partial improvement").
@@ -55,10 +55,10 @@ The existing 8/8/8/8 routing balance becomes 8/8/8/11. The asymmetry is small an
 1. ✅ Add r033, r034, r035 to `fixtures/resolved-corpus.json` (commit-ready).
 2. ✅ Re-run `node eval/embed-corpus.mjs` to regenerate `fixtures/embeddings.json` with 135 entries.
 3. ✅ Commit ADR-0006 + corpus update + new embeddings together so the pre-registration is git-history verifiable.
-4. ⏳ Run `bun run eval/runner.ts ci-nightly` against the existing fixture corpus (n=100, no fixture changes — only the resolved-corpus retrieval target changes).
+4. ⏳ Run `bun run eval/runner.ts ci-full` against the existing fixture corpus (n=100, no fixture changes — only the resolved-corpus retrieval target changes).
 5. ⏳ Append result to ADR-0006 as Accepted (if predicted lift hit) or Rejected (if any falsification condition triggered).
 
-## Result (2026-05-01 ci-nightly run, report `eval/reports/ci-nightly-1777613764488.json`)
+## Result (2026-05-01 ci-full run, report `eval/reports/ci-full-1777613764488.json`)
 
 **Headline:**
 
@@ -144,4 +144,4 @@ That loop is the JD-load-bearing discipline. This ADR exercises it on a real, fa
 - [`docs/decisions/0005-fixture-corpus-data-quality-audit.md`](0005-fixture-corpus-data-quality-audit.md) — confirms f017 is boundary-ambiguous, not mislabeled
 - [`fixtures/resolved-corpus.json`](../../fixtures/resolved-corpus.json) — corpus modified by this ADR
 - [`fixtures/embeddings.json`](../../fixtures/embeddings.json) — regenerated for the new entries
-- [`eval/reports/`](../../eval/reports/) — ci-nightly run report will land here when step 4 completes
+- [`eval/reports/`](../../eval/reports/) — ci-full run report will land here when step 4 completes

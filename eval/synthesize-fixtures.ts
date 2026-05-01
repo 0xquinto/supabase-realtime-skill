@@ -22,7 +22,7 @@ async function main() {
   }
   const anthropic = new Anthropic({ apiKey });
 
-  await mkdir("fixtures/ci-nightly", { recursive: true });
+  await mkdir("fixtures/ci-full", { recursive: true });
   const seedFiles = (await readdir("fixtures/ci-fast")).filter((f) => f.endsWith(".json")).sort();
 
   let counter = 1;
@@ -31,7 +31,7 @@ async function main() {
     const seed = JSON.parse(await readFile(join("fixtures/ci-fast", seedFile), "utf-8"));
     // Copy the seed first
     await writeFile(
-      join("fixtures/ci-nightly", `n${String(counter).padStart(3, "0")}-${seed.id}.json`),
+      join("fixtures/ci-full", `n${String(counter).padStart(3, "0")}-${seed.id}.json`),
       `${JSON.stringify(seed, null, 2)}\n`,
     );
     counter++;
@@ -88,7 +88,7 @@ Body: ${seed.ticket.body}`,
         expected_routing: seed.expected_routing,
       };
       await writeFile(
-        join("fixtures/ci-nightly", `n${String(counter).padStart(3, "0")}-${variation.id}.json`),
+        join("fixtures/ci-full", `n${String(counter).padStart(3, "0")}-${variation.id}.json`),
         `${JSON.stringify(variation, null, 2)}\n`,
       );
       counter++;

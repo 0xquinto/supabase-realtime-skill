@@ -6,7 +6,7 @@
 //
 // Usage:
 //   bun run eval/runner.ts ci-fast       # ci-fast/n=20 fixtures
-//   bun run eval/runner.ts ci-nightly    # ci-nightly/n=100 fixtures
+//   bun run eval/runner.ts ci-full    # ci-full/n=100 fixtures
 //
 // Single transient branch per run (cost-bounded). All fixtures execute
 // against that branch sequentially; the branch is torn down by withBranch's
@@ -34,7 +34,7 @@ interface Manifest {
   thresholds: ThresholdConfig;
 }
 
-type Tier = "ci-fast" | "ci-nightly";
+type Tier = "ci-fast" | "ci-full";
 
 async function loadFixtures(tier: Tier): Promise<Fixture[]> {
   const dir = join("fixtures", tier);
@@ -60,7 +60,7 @@ async function main(): Promise<void> {
 
   // Type-guarded tier validation — `as` cast on argv is unsafe.
   const arg = process.argv[2] ?? "ci-fast";
-  if (arg !== "ci-fast" && arg !== "ci-nightly") {
+  if (arg !== "ci-fast" && arg !== "ci-full") {
     console.error(`unknown tier: ${arg}`);
     process.exit(2);
   }

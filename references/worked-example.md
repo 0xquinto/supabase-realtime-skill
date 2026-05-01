@@ -66,7 +66,7 @@ The pattern above watches for **the UPDATE that lands when Automatic Embeddings 
 
 ## Eval shape
 
-This worked example doubles as the regression-suite SUT (`eval/runner.ts`). The 4 metrics in `manifest.json` are computed against this loop running over fixtures in `fixtures/ci-fast/` and `fixtures/ci-nightly/`. The eval harness:
+This worked example doubles as the regression-suite SUT (`eval/runner.ts`). The 4 metrics in `manifest.json` are computed against this loop running over fixtures in `fixtures/ci-fast/` and `fixtures/ci-full/`. The eval harness:
 
 1. Generates embeddings for all fixtures + a hand-curated 32-row resolved-ticket corpus via `node eval/embed-corpus.mjs` (one-time; cached in `fixtures/embeddings.json`).
 2. On each transient branch: applies the migration, seeds the resolved corpus rows with their embeddings, fires a throwaway warm-up insert+watch pair to absorb the T7 5-second window, then runs each fixture as a trial.

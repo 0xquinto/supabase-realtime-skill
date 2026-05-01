@@ -4,7 +4,7 @@
 
 **Goal:** Ship a TS-native Agent Skill bundle paired with an MCP server that gives an LLM agent the ability to react to Postgres row-changes and coordinate over Realtime broadcast channels on Supabase, deployed as an Edge Function, with eval instrumentation built in.
 
-**Architecture:** Two layers in one bundle — Skill (instruction: SKILL.md + references/) + MCP server (execution: 5 tools, Deno-compatible TS). Bounded subscription pattern (block until N events or timeout) replaces persistent WebSocket so the server is stateless across tool-calls and fits Edge Function isolate budgets. Eval harness (Vitest + ci-fast n=20 + ci-nightly n=100 + Wilson CIs + manifest.json thresholds) gates merges.
+**Architecture:** Two layers in one bundle — Skill (instruction: SKILL.md + references/) + MCP server (execution: 5 tools, Deno-compatible TS). Bounded subscription pattern (block until N events or timeout) replaces persistent WebSocket so the server is stateless across tool-calls and fits Edge Function isolate budgets. Eval harness (Vitest + ci-fast n=20 + ci-full n=100 + Wilson CIs + manifest.json thresholds) gates merges.
 
 **Tech Stack:** Bun + TypeScript (strict) + Vitest for build/test; Deno-compatible runtime for the Edge Function deployment; `@modelcontextprotocol/sdk` for MCP server; `@supabase/supabase-js` for Realtime+Postgres clients; `zod` for schema validation; pgvector + halfvec(1536) + Supabase Automatic Embeddings for the worked example.
 
@@ -71,7 +71,7 @@ supabase-realtime-skill/
 │
 ├── fixtures/
 │   ├── ci-fast/                      # n=20 hand-curated JSON fixtures
-│   └── ci-nightly/                   # n=100 hand-seeded + synthetic-augmented
+│   └── ci-full/                   # n=100 hand-seeded + synthetic-augmented
 │
 ├── tests/
 │   ├── fast/                         # offline Vitest, mocked Realtime/HTTP
@@ -108,7 +108,7 @@ supabase-realtime-skill/
 └── .github/
     └── workflows/
         ├── ci-fast.yml               # offline + ci-fast eval on PR
-        ├── ci-nightly.yml            # full smoke + ci-nightly eval, cron
+        ├── ci-full.yml            # full smoke + ci-full eval, cron
         └── publish.yml               # npm publish on tag
 ```
 
@@ -380,7 +380,7 @@ export default defineConfig({
 - [ ] **Step 2: Write `.env.example`**
 
 ```bash
-# Required for smoke + ci-nightly tests against real Supabase branches
+# Required for smoke + ci-full tests against real Supabase branches
 EVAL_SUPABASE_PAT=
 EVAL_HOST_PROJECT_REF=
 EVAL_REGION=us-east-1
@@ -1089,7 +1089,7 @@ describe("watch_table smoke (real branch)", () => {
 
           expect(result.events).toHaveLength(1);
           expect(result.closed_reason).toBe("max_events");
-          expect(latency).toBeLessThan(5_000); // single-trial floor; ci-nightly enforces p95 < 2000
+          expect(latency).toBeLessThan(5_000); // single-trial floor; ci-full enforces p95 < 2000
           // Log so we can eyeball week-1 spike numbers.
           console.log(`[smoke] watch_table single-trial latency: ${latency}ms`);
         } finally {
@@ -1123,7 +1123,7 @@ Expected: PASS in ≤4 minutes. Logged latency line proves the primitive end-to-
 git add tests/smoke/watch-table.smoke.test.ts package.json bun.lockb
 git commit -m "test(smoke): watch_table end-to-end on a real branch
 
-Single-trial floor only — ci-nightly enforces p95 < 2000ms across n=100.
+Single-trial floor only — ci-full enforces p95 < 2000ms across n=100.
 This test's job is to prove the primitive works against real Postgres +
 Realtime under a real branch's pooler. Logged latency feeds spike-success
 review."
@@ -3541,7 +3541,7 @@ correctness over action-taken trials. Wilson CIs from vendored foundation."
   },
   "fixture_tiers": {
     "ci-fast": { "n": 20, "trigger": "every PR" },
-    "ci-nightly": { "n": 100, "trigger": "daily on main" }
+    "ci-full": { "n": 100, "trigger": "daily on main" }
   },
   "statistical_design": {
     "comparison": "paired (same fixture IDs, McNemar's test on binary metrics)",
@@ -3581,7 +3581,7 @@ arXiv:2604.25850): every recommendation ships with predicted effect."
 //
 // Usage:
 //   bun run eval/runner.ts ci-fast       # ci-fast/n=20 fixtures
-//   bun run eval/runner.ts ci-nightly    # ci-nightly/n=100 fixtures
+//   bun run eval/runner.ts ci-full    # ci-full/n=100 fixtures
 
 import { readdir, readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -3602,7 +3602,7 @@ interface Fixture {
   ground_truth_top_k_ids?: string[];
 }
 
-async function loadFixtures(tier: "ci-fast" | "ci-nightly"): Promise<Fixture[]> {
+async function loadFixtures(tier: "ci-fast" | "ci-full"): Promise<Fixture[]> {
   const dir = join("fixtures", tier);
   const files = (await readdir(dir)).filter((f) => f.endsWith(".json")).sort();
   const fixtures: Fixture[] = [];
@@ -3614,8 +3614,8 @@ async function loadFixtures(tier: "ci-fast" | "ci-nightly"): Promise<Fixture[]> 
 }
 
 async function main() {
-  const tier = (process.argv[2] ?? "ci-fast") as "ci-fast" | "ci-nightly";
-  if (!["ci-fast", "ci-nightly"].includes(tier)) {
+  const tier = (process.argv[2] ?? "ci-fast") as "ci-fast" | "ci-full";
+  if (!["ci-fast", "ci-full"].includes(tier)) {
     console.error(`unknown tier: ${tier}`);
     process.exit(2);
   }
@@ -3749,15 +3749,15 @@ git commit -m "test(fixtures): ci-fast n=20 — hand-curated, 5×4 routing × ca
 
 Five fixtures per routing covering happy-path + edge cases. Hand-curated
 because ci-fast is the merge gate — synthetic-augmented data goes in
-ci-nightly, never here."
+ci-full, never here."
 ```
 
 ---
 
-### Task 26: ci-nightly fixtures (n=100, hand-seeded + synthetic-augmented)
+### Task 26: ci-full fixtures (n=100, hand-seeded + synthetic-augmented)
 
 **Files:**
-- Create: `supabase-realtime-skill/fixtures/ci-nightly/*.json` (×100)
+- Create: `supabase-realtime-skill/fixtures/ci-full/*.json` (×100)
 - Create: `supabase-realtime-skill/eval/synthesize-fixtures.ts`
 
 - [ ] **Step 1: Write the synthesizer**
@@ -3778,7 +3778,7 @@ const ANTHROPIC = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 const VARIATIONS_PER_SEED = 4; // 20 seeds × 5 = 100 total
 
 async function main() {
-  await mkdir("fixtures/ci-nightly", { recursive: true });
+  await mkdir("fixtures/ci-full", { recursive: true });
   const seedFiles = (await readdir("fixtures/ci-fast")).filter((f) => f.endsWith(".json")).sort();
 
   let counter = 1;
@@ -3786,7 +3786,7 @@ async function main() {
     const seed = JSON.parse(await readFile(join("fixtures/ci-fast", seedFile), "utf-8"));
     // Copy the seed first
     await writeFile(
-      join("fixtures/ci-nightly", `n${String(counter).padStart(3, "0")}-${seed.id}.json`),
+      join("fixtures/ci-full", `n${String(counter).padStart(3, "0")}-${seed.id}.json`),
       JSON.stringify(seed, null, 2),
     );
     counter++;
@@ -3817,7 +3817,7 @@ Body: ${seed.ticket.body}`,
         expected_routing: seed.expected_routing,
       };
       await writeFile(
-        join("fixtures/ci-nightly", `n${String(counter).padStart(3, "0")}-${variation.id}.json`),
+        join("fixtures/ci-full", `n${String(counter).padStart(3, "0")}-${variation.id}.json`),
         JSON.stringify(variation, null, 2),
       );
       counter++;
@@ -3833,15 +3833,15 @@ main().catch(console.error);
 
 ```bash
 bun run eval/synthesize-fixtures.ts
-ls fixtures/ci-nightly | wc -l   # expect 100
+ls fixtures/ci-full | wc -l   # expect 100
 ```
 
-Open 10 random files in `fixtures/ci-nightly/` and visually verify the labels are still correct after the LLM variation. If any label looks wrong, fix it by hand. **Don't trust the LLM blindly** — that's the playbook's "synthetic data before a hand-crafted seed" anti-pattern.
+Open 10 random files in `fixtures/ci-full/` and visually verify the labels are still correct after the LLM variation. If any label looks wrong, fix it by hand. **Don't trust the LLM blindly** — that's the playbook's "synthetic data before a hand-crafted seed" anti-pattern.
 
-- [ ] **Step 3: Run ci-nightly to validate**
+- [ ] **Step 3: Run ci-full to validate**
 
 ```bash
-bun run eval/runner.ts ci-nightly
+bun run eval/runner.ts ci-full
 ```
 
 Expected: PASS, all thresholds met. Cost: ~$2-3 + ~30 minutes.
@@ -3849,8 +3849,8 @@ Expected: PASS, all thresholds met. Cost: ~$2-3 + ~30 minutes.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add fixtures/ci-nightly/ eval/synthesize-fixtures.ts
-git commit -m "test(fixtures): ci-nightly n=100 (20 seeds + 80 LLM variations, spot-checked)
+git add fixtures/ci-full/ eval/synthesize-fixtures.ts
+git commit -m "test(fixtures): ci-full n=100 (20 seeds + 80 LLM variations, spot-checked)
 
 Each seed produces 4 variations via haiku-4-5; hand spot-checked to catch
 mislabeled outputs before commit. Per playbook anti-pattern: never
@@ -3863,7 +3863,7 @@ synthetic-only."
 
 **Files:**
 - Create: `supabase-realtime-skill/.github/workflows/ci-fast.yml`
-- Create: `supabase-realtime-skill/.github/workflows/ci-nightly.yml`
+- Create: `supabase-realtime-skill/.github/workflows/ci-full.yml`
 - Create: `supabase-realtime-skill/.github/workflows/publish.yml`
 
 - [ ] **Step 1: Write `ci-fast.yml`**
@@ -3910,10 +3910,10 @@ jobs:
           path: eval/reports/
 ```
 
-- [ ] **Step 2: Write `ci-nightly.yml`**
+- [ ] **Step 2: Write `ci-full.yml`**
 
 ```yaml
-name: ci-nightly
+name: ci-full
 
 on:
   schedule:
@@ -3932,11 +3932,11 @@ jobs:
       - uses: oven-sh/setup-bun@v1
       - run: bun install --frozen-lockfile
       - run: bun run test:smoke
-      - run: bun run eval/runner.ts ci-nightly
+      - run: bun run eval/runner.ts ci-full
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ci-nightly-report
+          name: ci-full-report
           path: eval/reports/
 ```
 
@@ -3975,11 +3975,11 @@ jobs:
 
 ```bash
 git add .github/workflows/
-git commit -m "ci: ci-fast on PR, ci-nightly cron, publish on tag
+git commit -m "ci: ci-fast on PR, ci-full cron, publish on tag
 
 ci-fast: typecheck + lint + offline tests + ci-fast eval (gated on
 EVAL_SUPABASE_PAT secret presence so contributor PRs don't fail).
-ci-nightly: full smoke + ci-nightly eval. publish: npm with provenance."
+ci-full: full smoke + ci-full eval. publish: npm with provenance."
 git push
 ```
 
@@ -4090,7 +4090,7 @@ Threshold *changes* require a versioned manifest bump explained in the PR body. 
 
 - **Paired comparisons.** Cross-version diffs use the same fixture IDs across runs and McNemar's test on binary outcomes. Not Welch's t-test (which assumes independent samples).
 - **ci-fast (n=20)** is too small for a non-paired design. It's only valid here because it's paired *and* we treat it as a *gate*, not a hypothesis test.
-- **ci-nightly (n=100)** + paired = MDE ~0.10 on `agent_action_correctness`. Sufficient to catch a 10-point regression with α=0.05 / β=0.20. Smaller regressions need more N.
+- **ci-full (n=100)** + paired = MDE ~0.10 on `agent_action_correctness`. Sufficient to catch a 10-point regression with α=0.05 / β=0.20. Smaller regressions need more N.
 
 ## > Why not LLM-judge as a gate?
 
@@ -4268,7 +4268,7 @@ The pattern above watches for **the UPDATE that lands when Automatic Embeddings 
 
 ## Eval shape
 
-This worked example doubles as the regression-suite SUT (`eval/runner.ts`). The 4 metrics in `manifest.json` are computed against this loop running over fixtures in `fixtures/ci-fast/` and `fixtures/ci-nightly/`. See `references/eval-methodology.md`.
+This worked example doubles as the regression-suite SUT (`eval/runner.ts`). The 4 metrics in `manifest.json` are computed against this loop running over fixtures in `fixtures/ci-fast/` and `fixtures/ci-full/`. See `references/eval-methodology.md`.
 
 ## What this composition demonstrates
 
@@ -4378,14 +4378,14 @@ The composition is the headline. Each piece on its own is unremarkable. The Skil
 
 Pre-registered thresholds in `manifest.json` (version 1.0.0, registered 2026-04-30):
 
-| Metric | Threshold | Result on ci-nightly (n=100) |
+| Metric | Threshold | Result on ci-full (n=100) |
 |---|---|---|
 | `latency_to_first_event_ms` p95 | < 2000ms | _populated post-week-3 run_ |
 | `missed_events_rate` | < 1% (CI high also < 1%) | _populated_ |
 | `spurious_trigger_rate` | < 2% (CI high < 3%) | _populated_ |
 | `agent_action_correctness` | ≥ 90% (CI low ≥ 85%) | _populated_ |
 
-(Replace placeholders with the actual numbers from `eval/reports/ci-nightly-*.json` once the suite has run on `main`.)
+(Replace placeholders with the actual numbers from `eval/reports/ci-full-*.json` once the suite has run on `main`.)
 
 What these numbers *don't* tell you, per Bean's construct-validity checklist (cited in `references/eval-methodology.md`): they only score the *worked example* fixtures, not the universe of agent workflows that might use these tools. They tell you the substrate is solid and one specific composition works well; they don't tell you "an arbitrary agent using `watch_table` will succeed." That's a generalization claim the harness deliberately doesn't make.
 
@@ -4409,11 +4409,11 @@ The shape of the artifact is deliberately small. Five tools, two primitives, one
 If you build on this pattern, please open an issue with what worked and what didn't. The artifact ships discipline, not certainty — feedback is what closes the gap.
 ```
 
-- [ ] **Step 2: Run a final ci-nightly pass and update the placeholder numbers**
+- [ ] **Step 2: Run a final ci-full pass and update the placeholder numbers**
 
 ```bash
-bun run eval/runner.ts ci-nightly
-# Open eval/reports/ci-nightly-<timestamp>.json
+bun run eval/runner.ts ci-full
+# Open eval/reports/ci-full-<timestamp>.json
 # Replace "_populated_" placeholders in docs/writeup.md with the actual rate / CI / latency
 ```
 
@@ -4425,7 +4425,7 @@ git commit -m "docs(writeup): the headline narrative — agent-watches-database 
 
 5 sections per spec §11. Persona: agent-system builder; Supabase platform
 engineer asides via > Why not X? callouts (5 of them — meets success
-criterion #3). Eval results table populated from latest ci-nightly report."
+criterion #3). Eval results table populated from latest ci-full report."
 ```
 
 ---
@@ -4497,7 +4497,7 @@ Hi! I've shipped a worked example of an Agent Skill paired with an MCP server, f
 - 5 MCP tools (`watch_table`, `broadcast_to_channel`, `subscribe_to_channel`, `list_channels`, `describe_table_changes`)
 - Bounded-subscription pattern (block until N events or timeout) — fits Edge Function isolate budgets
 - Worked example: support-ticket triage agent composing CDC + pgvector + Supabase Automatic Embeddings + Broadcast
-- Eval instrumentation built in — 4 pre-registered metrics (latency p95, missed_events, spurious_trigger, action_correctness) with Wilson CIs and `manifest.json` thresholds; ci-fast (n=20) on PR + ci-nightly (n=100) cron
+- Eval instrumentation built in — 4 pre-registered metrics (latency p95, missed_events, spurious_trigger, action_correctness) with Wilson CIs and `manifest.json` thresholds; ci-fast (n=20) on PR + ci-full (n=100) cron
 - Open Skills Standard (`SKILL.md` + `references/`)
 
 **Repo:** https://github.com/0xquinto/supabase-realtime-skill (Apache-2.0)
@@ -4515,13 +4515,13 @@ Happy to PR this in, refactor for the repo's conventions, or treat it as a separ
 
 - [ ] **Step 2: Watch for engagement**
 
-Per spec § 13 success criterion #4, **substantive maintainer engagement** (positive, negative, or in-discussion) is what closes the JD signal loop. If no response in 7 days, post a single follow-up with the concrete `manifest.json` numbers from the latest ci-nightly run.
+Per spec § 13 success criterion #4, **substantive maintainer engagement** (positive, negative, or in-discussion) is what closes the JD signal loop. If no response in 7 days, post a single follow-up with the concrete `manifest.json` numbers from the latest ci-full run.
 
 ---
 
 ## Phase 3 — Week 3 success gate (final)
 
-- [ ] All 4 metrics on ci-nightly meet `manifest.json` thresholds
+- [ ] All 4 metrics on ci-full meet `manifest.json` thresholds
 - [ ] `docs/writeup.md` published with ≥5 named tradeoffs and real eval numbers (not placeholders)
 - [ ] `supabase-realtime-skill@0.1.0` live on npm with provenance
 - [ ] Edge Function deployment works end-to-end against a fresh Pro project (operator walkthrough in `references/edge-deployment.md` is reproducible)
@@ -4545,7 +4545,7 @@ Per spec § 13 success criterion #4, **substantive maintainer engagement** (posi
 | §6 Skill layer (SKILL.md + 7 reference pages) | T10, T11 (week-1 docs), T18, T19 (week-2 docs), T28 (week-3 docs) |
 | §7 worked example schema + agent loop | T20 (migration), T21 (triage agent) |
 | §8.1 tool-level Vitest (offline + smoke) | All Task N — every tool has both tiers |
-| §8.2 worked-example regression suite (4 metrics, fixtures, manifest) | T22 (metrics), T23 (manifest), T24 (runner), T25 (ci-fast), T26 (ci-nightly) |
+| §8.2 worked-example regression suite (4 metrics, fixtures, manifest) | T22 (metrics), T23 (manifest), T24 (runner), T25 (ci-fast), T26 (ci-full) |
 | §8.3 why not LLM-judge | T28 (eval-methodology.md), T29 (writeup callout) |
 | §9 Edge Functions deployment | T8 (skeleton), T17 (full), T28 (operator doc) |
 | §10 repo layout | T1 + every subsequent file path matches |

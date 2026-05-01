@@ -23,7 +23,7 @@ Threshold *changes* require a versioned manifest bump explained in the PR body. 
 
 - **Paired comparisons.** Cross-version diffs use the same fixture IDs across runs and McNemar's test on binary outcomes. Not Welch's t-test (which assumes independent samples).
 - **ci-fast (n=20)** is too small for a non-paired design. It's only valid here because it's paired *and* we treat it as a *gate*, not a hypothesis test.
-- **ci-nightly (n=100)** + paired = MDE ~0.10 on `agent_action_correctness`. Sufficient to catch a 10-point regression with α=0.05 / β=0.20. Smaller regressions need more N.
+- **ci-full (n=100)** + paired = MDE ~0.10 on `agent_action_correctness`. Sufficient to catch a 10-point regression with α=0.05 / β=0.20. Smaller regressions need more N.
 
 ## > Why not LLM-judge as a gate?
 

@@ -225,7 +225,7 @@ interface QueueDrainThresholds {
 // baseline run; this is that run). The targets are 0.95 / 0.92 mirroring
 // the ADR; treated as "advisory at n=7" because the seed corpus is too
 // small to gate on (mechanical Wilson floor at n=7, p̂=1.0 is ~0.65).
-// Real gate at n=100 (ci-nightly tier) once the corpus is synthesized.
+// Real gate at n=100 (ci-full tier) once the corpus is synthesized.
 const TENTATIVE_THRESHOLDS: QueueDrainThresholds = {
   forward_correctness_rate_min: 0.95,
   forward_correctness_ci_low_min: 0.92,
@@ -251,7 +251,7 @@ function checkThresholds(
   }
   if (metrics.forward_correctness.ci_low < cfg.forward_correctness_ci_low_min) {
     advisory.push(
-      `forward_correctness.ci_low (${metrics.forward_correctness.ci_low.toFixed(3)}) < ${cfg.forward_correctness_ci_low_min} — mechanically expected at n=${metrics.forward_correctness.trials}; gate moves to ci-nightly tier`,
+      `forward_correctness.ci_low (${metrics.forward_correctness.ci_low.toFixed(3)}) < ${cfg.forward_correctness_ci_low_min} — mechanically expected at n=${metrics.forward_correctness.trials}; gate moves to ci-full tier`,
     );
   }
   return { pass: failures.length === 0, failures, advisory };

@@ -1,6 +1,6 @@
 // eval/embed-corpus.mjs
 //
-// One-time script: reads all fixtures (ci-fast + ci-nightly +
+// One-time script: reads all fixtures (ci-fast + ci-full +
 // resolved-corpus) and computes embeddings keyed by fixture id.
 // Writes JSON with metadata { provider, dim, embeddings: {...} }.
 //
@@ -20,7 +20,7 @@
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-const FIXTURES = ["ci-fast", "ci-nightly"];
+const FIXTURES = ["ci-fast", "ci-full"];
 const RESOLVED_CORPUS = "fixtures/resolved-corpus.json";
 const OUT = "fixtures/embeddings.json";
 

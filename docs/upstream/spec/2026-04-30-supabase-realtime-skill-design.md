@@ -35,7 +35,7 @@ These come out of the locked recon decisions and must shape every architectural 
 - **Edge Functions runtime.** Deno isolate, no Node-only modules, wall-clock timeout ≤150s on Pro tier (cap our subscriptions at 120s to leave margin), cold-start budget matters.
 - **Bounded subscription pattern, not persistent WebSocket.** `watch_table` and `subscribe_to_channel` block for ≤`timeout_ms` and return either when `max_events` matching events arrive or the timeout elapses. No state persists across tool-calls.
 - **Server-side filters where Realtime supports them** (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`); client-side fallback for the rest, documented in `references/predicates.md`.
-- **Eval instrumentation is a first-class part of the bundle, not an afterthought.** Pre-registered metrics + thresholds in `manifest.json`; Wilson CIs on every reported rate; ci-fast (n=20) and ci-nightly (n=100) tiers.
+- **Eval instrumentation is a first-class part of the bundle, not an afterthought.** Pre-registered metrics + thresholds in `manifest.json`; Wilson CIs on every reported rate; ci-fast (n=20) and ci-full (n=100) tiers.
 - **Differentiate on depth, opinionated patterns, and worked agent examples** — not on broader scope (the official `supabase` skill already has broader coverage). The headline is *what an agent should do with these primitives*, not just *what the primitives are*.
 - **Worked example must compose pgvector** (Automatic Embeddings substrate). This closes the JD's pgvector signal without overlapping Supabase's existing Automatic Embeddings flow.
 
@@ -254,7 +254,7 @@ The support-ticket triage agent (§ 7) runs against fixture corpora and reports 
 **Fixtures.** Two tiers in `fixtures/`:
 
 - `fixtures/ci-fast/` — n=20, runs on every PR. Hand-curated for breadth (one fixture per routing category × happy-path/edge-case axis).
-- `fixtures/ci-nightly/` — n=100, runs daily on `main`. Sampled from a synthetic-augmented corpus seeded by hand-labels (per playbook lesson — never synthetic-only).
+- `fixtures/ci-full/` — n=100, runs daily on `main`. Sampled from a synthetic-augmented corpus seeded by hand-labels (per playbook lesson — never synthetic-only).
 
 Each fixture: `{ id, ticket: { subject, body }, expected_routing, ground_truth_top_k_ids }`.
 
@@ -273,7 +273,7 @@ These thresholds are *pre-registered* — committed into `manifest.json` and ver
 
 - All cross-version comparisons are **paired** (same fixture IDs, McNemar's test for binary metrics). Not Welch's t-test.
 - ci-fast n=20 is too small for a non-paired design; only valid here because it's paired and we treat it as a *gate*, not a hypothesis test.
-- ci-nightly n=100 + paired = MDE ~0.10 on `agent_action_correctness`. Sufficient to catch a 10-point regression with α=0.05 / β=0.20.
+- ci-full n=100 + paired = MDE ~0.10 on `agent_action_correctness`. Sufficient to catch a 10-point regression with α=0.05 / β=0.20.
 
 ### 8.3 Why these 4 metrics, and not LLM-judge
 
@@ -322,17 +322,17 @@ supabase-realtime-skill/
 │           └── index.ts      # Edge Function entry, imports src/server/
 ├── fixtures/
 │   ├── ci-fast/              # n=20 hand-curated
-│   └── ci-nightly/           # n=100 hand-seeded + synthetic-augmented
+│   └── ci-full/           # n=100 hand-seeded + synthetic-augmented
 ├── tests/
 │   ├── fast/                 # offline Vitest, mocked HTTP/SDK
 │   └── smoke/                # online Vitest, real branch DB
 ├── eval/
 │   ├── runner.ts             # spawns agent loop against fixtures, reports metrics
 │   ├── metrics.ts            # Wilson CI, McNemar, threshold checks
-│   └── reports/              # gitignored output dir; ci-nightly artifacts uploaded elsewhere
+│   └── reports/              # gitignored output dir; ci-full artifacts uploaded elsewhere
 ├── docs/
 │   └── writeup.md            # the headline writeup (Q6 outline)
-└── .github/workflows/        # ci-fast on PR, ci-nightly cron, npm publish on tag
+└── .github/workflows/        # ci-fast on PR, ci-full cron, npm publish on tag
 ```
 
 **Reuse from `supabase-mcp-evals`:** the eval harness (`src/foundation/`) is repurposed as the eval backbone — `ApiClient`, `withBranch`, `runSample`, `aggregateRate`, `wilsonInterval`, `parseTranscript`, `ToolCallMatcher`. The standalone repo declares this repo as the *origin* of the methodology in `references/eval-methodology.md` and links to specific files (e.g. `playbook/PLAYBOOK.md` § 9 for statistical design heuristics, `playbook/research/construct-validity.md` for Bean's 8). Discipline backbone, cited; not headline narrative.
@@ -364,7 +364,7 @@ The shape is **spike-first**: Week 1 proves the load-bearing architectural assum
 |---|---|
 | **Week 1 — spike + adjacent docs** | (a) Bounded-subscription primitive end-to-end against a real branch DB: `watch_table` only, deployed as an Edge Function, measured `latency_to_first_event_ms` p95 against §8.2's 2000ms threshold. (b) `references/predicates.md` + `references/replication-identity.md` written *as the constraints are discovered*, not after — these inform the primitive's design. **Success = primitive works in production-shaped deployment; if it doesn't, redesign before Week 2.** |
 | **Week 2 — mechanical scale-out** | The other 4 tools (`broadcast_to_channel`, `subscribe_to_channel`, `list_channels`, `describe_table_changes`) with shared zod schemas + offline Vitest + smoke specs; full Edge Function deployment skeleton + JWT auth wiring; `references/rls-implications.md`; `SKILL.md` v1; `references/presence-deferred.md`. By end of week: all 5 tools green on offline + smoke. |
-| **Week 3 — worked example + eval + writeup + ship** | Worked example: support-ticket triage agent + Automatic Embeddings setup + pgvector retrieval; `references/pgvector-composition.md` + `references/worked-example.md` + `references/eval-methodology.md` + `references/edge-deployment.md`; eval runner + ci-fast n=20 + ci-nightly n=100 (hand-seeded + synthetic-augmented); `manifest.json` thresholds; CI integration (PR + nightly); `docs/writeup.md`; npm publish; post-launch upstream issue on `supabase/agent-skills`. |
+| **Week 3 — worked example + eval + writeup + ship** | Worked example: support-ticket triage agent + Automatic Embeddings setup + pgvector retrieval; `references/pgvector-composition.md` + `references/worked-example.md` + `references/eval-methodology.md` + `references/edge-deployment.md`; eval runner + ci-fast n=20 + ci-full n=100 (hand-seeded + synthetic-augmented); `manifest.json` thresholds; CI integration (PR + nightly); `docs/writeup.md`; npm publish; post-launch upstream issue on `supabase/agent-skills`. |
 
 **Why spike-first** (recon-5 confirms no one ships this — no public reference implementation to copy):
 - The novel primitive is `watch_table` end-to-end inside an Edge Function. If this doesn't work cleanly, every other deliverable inherits the breakage.
@@ -384,7 +384,7 @@ The shape is **spike-first**: Week 1 proves the load-bearing architectural assum
 The artifact ships well if all four hold:
 
 1. **Tool-level CI green and stable** for ≥1 week on `main` after launch.
-2. **All 4 metric thresholds met** on the ci-nightly suite at n=100.
+2. **All 4 metric thresholds met** on the ci-full suite at n=100.
 3. **Writeup demonstrates ≥5 named tradeoffs** (the `> Why not X?` asides) with concrete reasoning.
 4. **Upstream issue opened on `supabase/agent-skills`** proposing this as a sub-skill, with at least one substantive maintainer response (positive, negative, or in-discussion all count — what we want is signal that a Supabase engineer engaged with the artifact).
 

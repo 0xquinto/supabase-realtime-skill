@@ -1,7 +1,7 @@
 # ADR 0010: `boundedQueueDrain` — promote outbox-forwarder from documented pattern to deterministic module
 
 **Date:** 2026-05-01
-**Status:** Proposed → ready for promotion to Accepted (implementation shipped; reference page shipped; fake-driven baseline 7/7 PASS at n=7; rate gate passes, CI gate advisory at this n per ADR-0001 precedent). Operator promotes when comfortable; the only remaining work for full Acceptance is the n=100 corpus synthesis + ci-nightly run.
+**Status:** Proposed → ready for promotion to Accepted (implementation shipped; reference page shipped; fake-driven baseline 7/7 PASS at n=7; rate gate passes, CI gate advisory at this n per ADR-0001 precedent). Operator promotes when comfortable; the only remaining work for full Acceptance is the n=100 corpus synthesis + ci-full run.
 **Recommender:** Claude Opus 4.7 (assistant)
 **Decider:** Diego Gomez (TBD)
 **Implementation status (added 2026-05-01):**
@@ -110,7 +110,7 @@ The module's docs name this directly. The typed contract does not enforce per-ag
 
 **Calibration discipline (mirrors ADR-0007 § "action_correctness conditional on ADR-0006"):** the `0.95 / 0.92` numbers are *targets* for the pre-staged design, not committed thresholds. The actual cells lock at the moment the npm v0.2.0 baseline run lands at n=100 (Migration step 5), at which point this ADR amendment moves to a status update with the empirical p̂ replacing the tentative target. If the baseline reveals the substrate is meaningfully cleaner or dirtier, the threshold cell moves accordingly — same loop ADR-0001 documented for `manifest.json` v1.0.0 → v2.0.0.
 
-**Baseline at n=7 (seed corpus, 2026-05-01):** `rate=1.000`, Wilson CI `[0.646, 1.000]`. Rate clears the 0.95 target with full headroom; CI low (0.646) sits below the 0.92 floor by design — Wilson lower at p̂=1.0, n=7 is mechanically ~0.65, the same shape ADR-0001's `missed_events_ci_high` calibration documents. The CI floor moves to a passable state when n grows: at n=100, p̂=1.0 yields Wilson lower ~0.964 (CI low passes); at n=300, ~0.988. Rate floor is locked; CI floor stays "advisory at ci-fast n=7, gate at ci-nightly n≥100." See [`eval/queue-drain-runner.ts`](../../eval/queue-drain-runner.ts) for the runner that produced this baseline.
+**Baseline at n=7 (seed corpus, 2026-05-01):** `rate=1.000`, Wilson CI `[0.646, 1.000]`. Rate clears the 0.95 target with full headroom; CI low (0.646) sits below the 0.92 floor by design — Wilson lower at p̂=1.0, n=7 is mechanically ~0.65, the same shape ADR-0001's `missed_events_ci_high` calibration documents. The CI floor moves to a passable state when n grows: at n=100, p̂=1.0 yields Wilson lower ~0.964 (CI low passes); at n=300, ~0.988. Rate floor is locked; CI floor stays "advisory at ci-fast n=7, gate at ci-full n≥100." See [`eval/queue-drain-runner.ts`](../../eval/queue-drain-runner.ts) for the runner that produced this baseline.
 
 Single primary metric chosen deliberately. The recon's other candidates (`ack_durability_rate_min`, `at_least_once_holds_rate_min`) are deferred as **candidate follow-up amendments** if `forward_correctness_rate_min` proves too coarse. Multi-metric gating without paired CI math drifts toward LLM-judge-as-gate (anti-pattern; playbook § 8).
 
@@ -127,7 +127,7 @@ This is also an opportunity to retroactively clarify [`references/replication-id
 Properties:
 - **Binary scoring** per fixture (correct end-state? yes/no).
 - **Falsifiable in both directions.** If agents already handle raw-primitive composition fine, the module isn't earning its keep — informative null. If the module wins, it's evidence the consolidation was correct *and* aligned with Anthropic's published guidance.
-- **Wilson-CI gateable** at n=100 (ci-nightly) and n=300 (`manifest.json` v2.0.0) on the same fixture infrastructure.
+- **Wilson-CI gateable** at n=100 (ci-full) and n=300 (`manifest.json` v2.0.0) on the same fixture infrastructure.
 - **Requires new fixtures.** Existing `fixtures/ci-fast/` is triage-shaped. New fixtures for queue-drain need ~20 hand-curated seeds covering: clean drain, poison-row → DLQ, transient broadcast failure → retry-success, idempotency-key collision → no double-forward, drain-condition timeout. Cost: similar to v0.1 corpus synthesis (~$0.50 in LLM calls + spot-check).
 
 ## What this ADR commits to (when promoted to Accepted)
@@ -136,7 +136,7 @@ Properties:
 2. Ship `boundedQueueDrain` from `src/server/queue-drain.ts`, exporting from `supabase-realtime-skill/server`. Reuse `boundedWatch` + `handleBroadcast` + the existing adapter seam — **no new abstraction layer**.
 3. Build 20-fixture seed corpus for `forward_correctness_rate_min`, including poison-row injection.
 4. Amend ADR-0007's pre-staged `manifest.json` v2.0.0 design with the two new cells. Pre-staging discipline is preserved; the file ships atomically with the n=300 corpus.
-5. Run `ci-nightly` once at n=100 against the new metric to establish empirical baseline before `manifest.json` v2.0.0 lands.
+5. Run `ci-full` once at n=100 against the new metric to establish empirical baseline before `manifest.json` v2.0.0 lands.
 
 ## What this ADR doesn't do
 
@@ -164,7 +164,7 @@ When this ADR is Accepted:
 2. **Module implementation.** `src/server/queue-drain.ts` — small file, composes existing primitives. `src/server/index.ts` exports `boundedQueueDrain`. `tests/fast/queue-drain.test.ts` covers the loop with mocked adapters. `tests/smoke/queue-drain.smoke.test.ts` exercises against a real branch.
 3. **Reference page.** Promote `references/outbox-forwarder.md` to `references/queue-drain.md` with the typed contract surface. Update `SKILL.md` to link the new page. Cross-link from the old page (or redirect via README note) for any external links.
 4. **Manifest amendment.** Append `forward_correctness_rate_min` + `forward_correctness_ci_low_min` to ADR-0007's pre-staged `manifest.json` v2.0.0 design. Don't ship `manifest.json` yet — atomic ship with n=300 corpus is preserved.
-5. **Eval baseline run.** `bun run eval/runner.ts ci-nightly` at n=100 against v1 manifest + the new cells (advisory — they won't gate at n=100 because of the same Wilson-bound math ADR-0001 documented).
+5. **Eval baseline run.** `bun run eval/runner.ts ci-full` at n=100 against v1 manifest + the new cells (advisory — they won't gate at n=100 because of the same Wilson-bound math ADR-0001 documented).
 6. **Status flip.** This ADR Accepted, ADR-0007 amendment noted, release as npm v0.2.0.
 
 ## Consequences

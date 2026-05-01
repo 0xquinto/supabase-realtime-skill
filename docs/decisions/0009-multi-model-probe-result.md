@@ -92,5 +92,5 @@ This is what eval-first discipline produces: a calibration sequence where each m
 - [`docs/decisions/0007-pre-stage-v2-manifest-design.md`](0007-pre-stage-v2-manifest-design.md) — v2.0.0 thresholds that this ADR's result validates as conservative
 - [`docs/decisions/0008-comparative-embedding-eval-design.md`](0008-comparative-embedding-eval-design.md) — pre-staged eval that could close the residual f017-v3 miss if 1536-dim embeddings help
 - [`eval/triage-agent.ts`](../../eval/triage-agent.ts) — `EVAL_TRIAGE_MODEL` env override added in `dbaff31`
-- [`eval/reports/ci-nightly-1777614264922.json`](../../eval/reports/) — Sonnet result (file lives in local working tree; `eval/reports/` is gitignored)
-- [`eval/reports/ci-nightly-1777613764488.json`](../../eval/reports/) — Haiku post-ADR-0006 baseline (same gitignore caveat)
+- [`eval/reports/ci-full-1777614264922.json`](../../eval/reports/) — Sonnet result (file lives in local working tree; `eval/reports/` is gitignored)
+- [`eval/reports/ci-full-1777613764488.json`](../../eval/reports/) — Haiku post-ADR-0006 baseline (same gitignore caveat)
