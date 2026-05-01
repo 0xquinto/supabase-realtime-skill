@@ -102,7 +102,7 @@ See [`references/edge-deployment.md`](references/edge-deployment.md) for full op
 
 All five over `WebStandardStreamableHTTPServerTransport` (MCP SDK 1.29+), per-request stateless. Five tools, intentionally tight — see [`SKILL.md`](SKILL.md) for what *not* to use them for.
 
-## Eval results (latest ci-nightly, n=100, post-ADR-0009 with Sonnet 4.6)
+## Eval results (latest ci-full, n=100, post-ADR-0009 with Sonnet 4.6)
 
 | Metric | Result | Threshold (manifest v1.0.0) | Status |
 |---|---|---|---|
@@ -127,7 +127,7 @@ Run on demand (locally):
 
 ```bash
 EVAL_SUPABASE_PAT=... EVAL_HOST_PROJECT_REF=... ANTHROPIC_API_KEY=... \
-  bun run eval/runner.ts ci-nightly
+  bun run eval/runner.ts ci-full
 # Cost ~$2-3, ~30 min wallclock against a transient Pro branch.
 # Override the routing model with EVAL_TRIAGE_MODEL=claude-sonnet-4-6
 # (default haiku-4-5).
@@ -136,7 +136,7 @@ EVAL_SUPABASE_PAT=... EVAL_HOST_PROJECT_REF=... ANTHROPIC_API_KEY=... \
 Or via GitHub Actions (`workflow_dispatch`, requires the three secrets set on the repo):
 
 ```bash
-gh workflow run ci-nightly.yml -R 0xquinto/supabase-realtime-skill
+gh workflow run ci-full.yml -R 0xquinto/supabase-realtime-skill
 ```
 
 The cron schedule was dropped (`b49a1fc`) — daily runs against a substrate that doesn't change daily are cost burn for no signal. Methodology evidence is the workflow file + the run-on-demand path, not a calendar trigger.
@@ -148,7 +148,7 @@ Methodology: 4 metrics, binary scoring, Wilson 95% CIs, McNemar paired-test comp
 The judgment trail. Each ADR carries a falsifiable predicted effect or a documented constraint. The calibration sequence above is one ADR per step — every gain attributable to one named intervention with its own paper trail. See [`docs/decisions/`](docs/decisions/) for the live index.
 
 - [ADR-0001 — manifest v1 stays uncalibrated](docs/decisions/0001-manifest-v1-stays-uncalibrated.md). Wilson CI bounds at n=100 are mechanically unreachable; resist the urge to retroactively soften the gate. v2.0.0 amendment deferred to a versioned bump.
-- [ADR-0002 — f019 seed relabel](docs/decisions/0002-f019-seed-relabel.md). The eval caught a mislabeled fixture (service-bug bucketed as `general`); relabeled with audit trail before re-running ci-nightly.
+- [ADR-0002 — f019 seed relabel](docs/decisions/0002-f019-seed-relabel.md). The eval caught a mislabeled fixture (service-bug bucketed as `general`); relabeled with audit trail before re-running ci-full.
 - [ADR-0003 — dual-path embedding provider](docs/decisions/0003-dual-path-embedding-provider.md). Canonical schema stays spec-compliant `halfvec(1536)` with OpenAI; eval falls through to `halfvec(384)` Transformers.js when `OPENAI_API_KEY` unset. Closes the spec deviation.
 - [ADR-0004 — reshape T31 as user-feedback (proposed)](docs/decisions/0004-reshape-t31-as-user-feedback.md). Pre-T31 recon found the upstream maintainer's policy is monolith + references, not federation. Reshape pending operator decision.
 - [ADR-0005 — Mousavi data-quality audit](docs/decisions/0005-fixture-corpus-data-quality-audit.md). Per-fixture audit on the 20 ci-fast seeds; 5% flaw rate (only f017 boundary-ambiguous), below the 10% repair threshold. Concordant with the eval's systematic-miss findings.
@@ -169,7 +169,7 @@ The pre-T31 recon (whether to file the upstream issue) lives in [`docs/upstream/
 - [`src/client/`](src/client/) — npm consumer barrel (boundedWatch + schemas + types)
 - [`supabase/functions/mcp/`](supabase/functions/mcp/) — Edge Function entry (`WebStandardStreamableHTTPServerTransport`)
 - [`eval/`](eval/) — regression harness with pre-registered thresholds + synthesizer + triage agent
-- [`fixtures/`](fixtures/) — 20 hand-curated ci-fast seeds + 100 ci-nightly (20 seeds × 5 LLM-augmented variations)
+- [`fixtures/`](fixtures/) — 20 hand-curated ci-fast seeds + 100 ci-full (20 seeds × 5 LLM-augmented variations)
 - [`docs/writeup.md`](docs/writeup.md) — the headline narrative
 - [`docs/decisions/`](docs/decisions/) — ADRs (see directory for the live index)
 - [`docs/upstream/`](docs/upstream/README.md) — recon + spec + plan that produced this repo
@@ -179,7 +179,7 @@ The pre-T31 recon (whether to file the upstream issue) lives in [`docs/upstream/
 
 - Dual ESM + CJS publish via `tsup` with `.d.ts` and `.d.cts` declarations
 - npm publish via [OIDC Trusted Publisher](https://docs.npmjs.com/trusted-publishers/) (no `NPM_TOKEN` secret in CI; sigstore-signed provenance attestation on every release)
-- ci-fast (PR-blocking) + ci-nightly (manual `workflow_dispatch`) split — full CI in [`.github/workflows/`](.github/workflows/)
+- ci-fast (PR-blocking) + ci-full (manual `workflow_dispatch`) split — full CI in [`.github/workflows/`](.github/workflows/)
 - Strict TypeScript (`exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, `noExplicitAny`)
 
 ## License

@@ -96,7 +96,7 @@ const result = await boundedQueueDrain({
 // result: { forwarded, dead_lettered, failed, closed_reason }
 ```
 
-Categories partition the events array — `forwarded + dead_lettered + failed === events.length`. Filed against ADR-0010 (Proposed): [`docs/decisions/0010-bounded-queue-drain.md`](docs/decisions/0010-bounded-queue-drain.md). Reference page upgrade pending.
+Categories partition the events array — `forwarded + dead_lettered + failed === events.length`. Full reference: [`references/queue-drain.md`](references/queue-drain.md). Filed against ADR-0010 (Proposed): [`docs/decisions/0010-bounded-queue-drain.md`](docs/decisions/0010-bounded-queue-drain.md).
 
 **Don't** use this when ordering across destinations matters (Realtime broadcast is fire-and-forget; per-destination FIFO needs a different shape) or when subscribers can't be made idempotent (run a consumer-side inbox table — out of scope for v0.2.0).
 
@@ -116,4 +116,5 @@ End-to-end walkthrough with code in `references/worked-example.md`.
 - [`eval-methodology.md`](references/eval-methodology.md) — the 4 metrics, why not LLM-judge
 - [`edge-deployment.md`](references/edge-deployment.md) — operator setup
 - [`worked-example.md`](references/worked-example.md) — support-ticket triage end-to-end (LLM + pgvector)
-- [`outbox-forwarder.md`](references/outbox-forwarder.md) — non-LLM worked example (substrate generalizes beyond AI use cases)
+- [`queue-drain.md`](references/queue-drain.md) — `boundedQueueDrain` typed module: contract, schema, drain loop, Edge Function shape
+- [`outbox-forwarder.md`](references/outbox-forwarder.md) — manual-composition predecessor (kept for non-SQL DLQ shapes)

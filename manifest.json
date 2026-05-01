@@ -14,7 +14,7 @@
   },
   "fixture_tiers": {
     "ci-fast": { "n": 20, "trigger": "every PR" },
-    "ci-nightly": { "n": 100, "trigger": "daily on main" }
+    "ci-full": { "n": 100, "trigger": "manual via workflow_dispatch" }
   },
   "statistical_design": {
     "comparison": "paired (same fixture IDs, McNemar's test on binary metrics)",

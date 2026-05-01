@@ -3,11 +3,11 @@
 **Date:** 2026-05-01
 **Status:** Proposed (design locked; ships when the n=300 fixture corpus lands)
 **Decider:** Diego Gomez
-**Amendments:** [ADR-0010](0010-bounded-queue-drain.md) proposes adding `forward_correctness_rate_min` + `forward_correctness_ci_low_min` cells to this manifest (also Proposed — would land atomically with the v0.2.0 npm release).
+**Amendments:** [ADR-0010](0010-bounded-queue-drain.md) proposes adding `forward_correctness_rate_min` + `forward_correctness_ci_low_min` cells to this manifest (Proposed → ready for Accepted promotion as of 2026-05-01; implementation + reference page + n=7 fake-driven baseline all shipped). The two new cells stay pre-staged in this design until the n=300 fixture corpus + ci-full run land — same atomic-ship discipline this ADR's § "What this ADR doesn't do" specifies.
 **Note on versioning:** "v2.0.0" throughout this ADR refers to **`manifest.json` v2.0.0** (the eval-thresholds file), not npm package v2.0.0. The two streams are independently versioned — see [ADR-0001](0001-manifest-v1-stays-uncalibrated.md) for why. Current state: `manifest.json` v1.0.0 ships with npm v0.1.1.
 **Context:** ADR-0001 deferred Wilson CI calibration to a `manifest.json` v2.0.0 with rationale: at n=100, the CI upper bounds for `missed_events` and `spurious_trigger` (0.01 and 0.03 respectively) are mathematically unreachable even with a perfectly clean substrate (rate = 0/100 yields Wilson upper ≈ 0.0370 at 95% confidence). The two CI cells stay in FAIL state in v0.1.x by deliberate design — pre-registration discipline holds.
 
-This ADR locks the `manifest.json` v2.0.0 design without yet committing the file (the n=300 fixture corpus and its synthesizer pass need to land first; ADR-0001 estimated cost at $6-9 per nightly run for n=300, plus initial corpus synthesis cost).
+This ADR locks the `manifest.json` v2.0.0 design without yet committing the file (the n=300 fixture corpus and its synthesizer pass need to land first; ADR-0001 estimated cost at $6-9 per ci-full run for n=300, plus initial corpus synthesis cost).
 
 ## The math against which v2.0.0 is calibrated
 
@@ -34,7 +34,7 @@ Wilson lower bound at p̂ = 0.94 (representative `action_correctness` rate):
 n=300 is the smallest tier that **simultaneously**:
 1. Brings `missed_events_ci_high` into a reachable range for substrate-clean runs (≤ 0.013 vs current 0.01 target)
 2. Brings `action_correctness_ci_low` to ~0.905 at the empirical rate (currently 0.875 at n=100)
-3. Stays under a $10 / 90-min cost ceiling per nightly run (linear scaling from current $2-3 / 30 min)
+3. Stays under a $10 / 90-min cost ceiling per ci-full run (linear scaling from current $2-3 / 30 min)
 
 ## Decision: v2.0.0 thresholds and rationale per cell
 
@@ -44,7 +44,7 @@ Pre-staged file (not yet committed as `manifest.json` — will replace v1.0.0 at
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "2.0.0",
-  "registered_at": "<TBD: date the n=300 ci-nightly corpus + first run land>",
+  "registered_at": "<TBD: date the n=300 ci-full corpus + first run land>",
   "comment": "Pre-registered eval thresholds. Changes require versioned bump explained in PR body. v2.0.0 amendments documented in docs/decisions/0007-pre-stage-v2-manifest-design.md.",
   "thresholds": {
     "latency_p95_ms_max": 2000,
@@ -57,7 +57,7 @@ Pre-staged file (not yet committed as `manifest.json` — will replace v1.0.0 at
   },
   "fixture_tiers": {
     "ci-fast": { "n": 20, "trigger": "every PR" },
-    "ci-nightly": { "n": 300, "trigger": "daily on main" }
+    "ci-full": { "n": 300, "trigger": "manual via workflow_dispatch" }
   },
   "statistical_design": {
     "comparison": "paired (same fixture IDs, McNemar's test on binary metrics)",
@@ -79,17 +79,19 @@ Pre-staged file (not yet committed as `manifest.json` — will replace v1.0.0 at
 | `spurious_trigger_ci_high_max` | 0.03 → 0.015 | Tightened. Same Wilson-upper math as missed_events. |
 | `action_correctness_rate_min` | 0.90 → 0.92 | Tightened. ADR-0006 (if accepted) brings v0.1.x to ~0.97; v2.0.0 ships with 0.92 as the new floor. If ADR-0006 is rejected, this stays at 0.90 in v2.0.0. **This cell is conditional on ADR-0006 outcome.** |
 | `action_correctness_ci_low_min` | 0.85 → 0.88 | Tightened. Wilson lower at n=300, p̂=0.94 is ~0.905; at p̂=0.92 is ~0.883. Setting floor to 0.88 keeps a small cushion. If ADR-0006 is rejected, this stays at 0.85 in v2.0.0. |
+| `forward_correctness_rate_min` | (new — ADR-0010) | 0.95 *(tentative; baseline 1.0 at n=7)* | New cell from ADR-0010. The boundedQueueDrain composition + handler retry envelope should leave at most ~5% of fixtures in incorrect end-state under realistic poison-row injection. Tighter than `action_correctness` because the work is mechanical (no LLM-judgment-call surface). Baseline run 2026-05-01 against the n=7 seed corpus produced 7/7 PASS; threshold locks when n=100/n=300 lands. |
+| `forward_correctness_ci_low_min` | (new — ADR-0010) | 0.92 *(advisory at ci-fast n=7; gate at ci-full n≥100)* | New cell from ADR-0010. Wilson lower at n=300, p̂=0.95 ≈ 0.918; floor 0.92 keeps a small cushion at full corpus size. Mechanically below 0.92 at n=7 (Wilson lower at p̂=1.0, n=7 is ~0.65) — same "FAIL by deliberate design at small-n" pattern ADR-0001 set. Becomes a real gate at the ci-full tier. |
 
 ### What this ADR commits to
 
-1. **n=300 is the v2.0.0 ci-nightly tier.** Cost-bounded at <$10 / <90 min per run.
+1. **n=300 is the v2.0.0 ci-full tier.** Cost-bounded at <$10 / <90 min per run.
 2. **CI gates are kept tight, not loosened.** The discipline is calibration-by-bumping-n, not gate-relaxation. v1.0.0's stay-in-FAIL signal is preserved as the precedent.
 3. **`action_correctness` thresholds are conditional on ADR-0006.** Two-track design avoids the anti-pattern of raising the floor *because* a single intervention happened to land — the floor only goes up if the intervention's effect is durable across the larger n=300 corpus.
 4. **`latency_p95_ms_max` doesn't change.** Substrate latency is independent of fixture corpus size; the v1.0.0 cap is well-calibrated.
 
 ### What this ADR doesn't do
 
-- **Doesn't ship the file.** `manifest.json` stays at v1.0.0 until the n=300 corpus + first ci-nightly run land. The pre-staged JSON above is the design intent; the actual file will be committed atomically with the n=300 corpus to preserve pre-registration semantics (the runner consumes whatever `manifest.json` says at run time).
+- **Doesn't ship the file.** `manifest.json` stays at v1.0.0 until the n=300 corpus + first ci-full run land. The pre-staged JSON above is the design intent; the actual file will be committed atomically with the n=300 corpus to preserve pre-registration semantics (the runner consumes whatever `manifest.json` says at run time).
 - **Doesn't auto-trigger the n=300 corpus synthesis.** That's a follow-up work item with its own cost ceiling. Synthesizer would generate 80×3 = 240 LLM-augmented variations from the existing 20 ci-fast seeds (matching the v0.1.x synthesis pattern at commit `d705b17` but at 3× scale).
 - **Doesn't promise CI bounds will be met first try.** v1.0.0 honestly shipped with a FAIL; v2.0.0 might too if the substrate has a real rare-event miss at n=300 that didn't surface at n=100. That's the discipline working.
 
@@ -100,9 +102,9 @@ Steps to ship v2.0.0:
 1. Run synthesizer at n=300 (240 new variations + 60 existing) — cost ~$0.80 in LLM calls + ~10 min wallclock.
 2. Spot-check 30 of the 240 new fixtures (10% sample, manual inspection for label clarity per ADR-0005's Mousavi extension).
 3. Embed the new fixtures via `node eval/embed-corpus.mjs` (or via OpenAI 1536 if `OPENAI_API_KEY` set per ADR-0003).
-4. Run ci-nightly once at n=300 against the v1.0.0 manifest (still in FAIL state) to establish empirical baseline.
+4. Run ci-full once at n=300 against the v1.0.0 manifest (still in FAIL state) to establish empirical baseline.
 5. Commit `manifest.json` v2.0.0 atomically with the n=300 fixture corpus + this ADR's status flipped to Accepted with the actual run results in the addendum.
-6. Re-run ci-nightly against v2.0.0 manifest. The gate either passes (substrate is clean enough that the new tightened bounds are met) or stays in FAIL with documented rationale (just like v1.0.0). Either is honest.
+6. Re-run ci-full against v2.0.0 manifest. The gate either passes (substrate is clean enough that the new tightened bounds are met) or stays in FAIL with documented rationale (just like v1.0.0). Either is honest.
 
 ## Consequences
 

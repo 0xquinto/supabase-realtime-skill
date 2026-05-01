@@ -129,7 +129,7 @@ Per playbook § 8, no recommendation without a falsifiable predicted effect. Ext
 Properties this predicted effect has:
 - **Binary scoring** (per-fixture: did the drain leave correct end-state? yes/no). Matches playbook § 8.
 - **Falsifiable in both directions.** If agents already do fine with raw primitives, the module isn't earning its keep — that's an informative null. If the module wins, it's evidence the consolidation was correct.
-- **Wilson-CI gateable** at n=100 (ci-nightly) and n=300 (v2.0.0) the same way the existing `action_correctness` is.
+- **Wilson-CI gateable** at n=100 (ci-full) and n=300 (v2.0.0) the same way the existing `action_correctness` is.
 - **Requires new fixtures.** Existing `fixtures/ci-fast/` is triage-shaped; new fixtures need to exercise outbox/queue patterns. Cost: similar to v0.1 corpus synthesis (~$0.50 in LLM calls + spot-check).
 
 Plausible candidate metric names for the v2.0.0 manifest:

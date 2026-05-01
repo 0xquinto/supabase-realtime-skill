@@ -48,9 +48,9 @@ The comparison is paired-by-fixture (McNemar's test on binary `correct` per tria
 1. Generate two `embeddings.json` files:
    - `fixtures/embeddings-openai-1536.json` — produced by `OPENAI_API_KEY=sk-... node eval/embed-corpus.mjs`
    - `fixtures/embeddings-minilm-384.json` — already exists as `fixtures/embeddings.json` (committed in `a367a5c`)
-2. Run ci-nightly twice against the SAME fixture corpus (n=100), swapping `embeddings.json` between runs:
-   - Run A: copy `embeddings-minilm-384.json` → `embeddings.json`, run ci-nightly, archive report.
-   - Run B: copy `embeddings-openai-1536.json` → `embeddings.json`, run `eval/migrations/eval-dim-override-384.sql` removed (i.e., schema goes to canonical `halfvec(1536)`), run ci-nightly, archive report.
+2. Run ci-full twice against the SAME fixture corpus (n=100), swapping `embeddings.json` between runs:
+   - Run A: copy `embeddings-minilm-384.json` → `embeddings.json`, run ci-full, archive report.
+   - Run B: copy `embeddings-openai-1536.json` → `embeddings.json`, run `eval/migrations/eval-dim-override-384.sql` removed (i.e., schema goes to canonical `halfvec(1536)`), run ci-full, archive report.
 3. Compute paired McNemar statistic on per-fixture `correct` deltas. Significance at α=0.05 with the playbook's Wilson CI.
 4. Append the result here as Accepted (lift confirmed) or Rejected (lift not measurable / wrong direction).
 
@@ -59,8 +59,8 @@ The comparison is paired-by-fixture (McNemar's test on binary `correct` per tria
 | Step | Cost | Wall-clock |
 |---|---|---|
 | Generate OpenAI embeddings for 155 corpus items | <$0.001 | ~30s |
-| ci-nightly run A (MiniLM, baseline) | $2-3 | ~30 min |
-| ci-nightly run B (OpenAI 1536) | $2-3 | ~30 min |
+| ci-full run A (MiniLM, baseline) | $2-3 | ~30 min |
+| ci-full run B (OpenAI 1536) | $2-3 | ~30 min |
 | **Total marginal** | **~$5-6** | **~1h** |
 
 Within the cost ceiling for a v0.2 methodology study.
@@ -70,11 +70,11 @@ Within the cost ceiling for a v0.2 methodology study.
 1. ✅ Operator configured `OPENAI_API_KEY` (2026-05-01).
 2. ✅ `OPENAI_API_KEY=... node eval/embed-corpus.mjs` → produced 1536-dim `embeddings.json` (135 entries).
 3. ✅ Runner detected `dim != 384` and skipped the override migration (canonical `halfvec(1536)` schema applied).
-4. ✅ Ran `EVAL_TRIAGE_MODEL=claude-sonnet-4-6 bun run eval/runner.ts ci-nightly` → report `eval/reports/ci-nightly-1777615609530.json`.
-5. ✅ Paired-vs-baseline: ADR-0009's run (`ci-nightly-1777614264922.json`) is the Sonnet 4.6 + MiniLM 384 baseline. Same fixture corpus, same model, same runner — only embedding dim differs. The two reports are paired-comparable per fixture ID.
+4. ✅ Ran `EVAL_TRIAGE_MODEL=claude-sonnet-4-6 bun run eval/runner.ts ci-full` → report `eval/reports/ci-full-1777615609530.json`.
+5. ✅ Paired-vs-baseline: ADR-0009's run (`ci-full-1777614264922.json`) is the Sonnet 4.6 + MiniLM 384 baseline. Same fixture corpus, same model, same runner — only embedding dim differs. The two reports are paired-comparable per fixture ID.
 6. ✅ Result appended below; Status flipped to Rejected.
 
-## Result (2026-05-01 ci-nightly run, OpenAI 1536 + Sonnet 4.6, report `ci-nightly-1777615609530.json`)
+## Result (2026-05-01 ci-full run, OpenAI 1536 + Sonnet 4.6, report `ci-full-1777615609530.json`)
 
 **Headline:** identical to the Sonnet 4.6 + MiniLM 384 baseline. The 1536-dim embeddings produce no measurable lift.
 

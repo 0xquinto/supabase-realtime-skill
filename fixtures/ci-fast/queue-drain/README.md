@@ -55,7 +55,7 @@ The recon's predicted-effect statement names "idempotency-key collisions" as a c
 
 ## Synthesis path (out of scope here)
 
-These 7 seeds are the **seed corpus**. The full ci-fast tier (n=20) would add ~13 more by structured variation (different row counts, different destination shapes, different timing edges). The ci-nightly tier (n=100; eventual n=300 per ADR-0007) would synthesize from these + the ci-fast variants the same way `fixtures/ci-fast/` was extended for the triage corpus (see ADR-0006 / synthesizer at `eval/synthesize-fixtures.ts`).
+These 7 seeds are the **seed corpus**. The full ci-fast tier (n=20) would add ~13 more by structured variation (different row counts, different destination shapes, different timing edges). The ci-full tier (n=100; eventual n=300 per ADR-0007) would synthesize from these + the ci-fast variants the same way `fixtures/ci-fast/` was extended for the triage corpus (see ADR-0006 / synthesizer at `eval/synthesize-fixtures.ts`).
 
 ## Status
 

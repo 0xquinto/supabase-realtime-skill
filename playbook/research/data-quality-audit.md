@@ -4,7 +4,7 @@
 **Reviewer:** Diego Gomez (single-reviewer; v0.2 follow-up to add second-reviewer pass)
 **Trigger:** Compliance audit (`docs/upstream/recon/2026-04-30-portfolio-redesign-recon.md` companion + the spec/playbook compliance audit run after v0.1.x ship) flagged that the **Mousavi data-quality audit** from `playbook/PLAYBOOK.md` § 8 was named in the discipline but never explicitly executed on the seed corpus.
 **Scope:** All 20 ci-fast fixtures (`fixtures/ci-fast/f001...f020.json`).
-**Method:** Mousavi-style classify each fixture against a 5-category rubric. ≥10% flag rate triggers repair before next ci-nightly run.
+**Method:** Mousavi-style classify each fixture against a 5-category rubric. ≥10% flag rate triggers repair before next ci-full run.
 
 ## Rubric
 
@@ -43,7 +43,7 @@ For each fixture, classify the (subject, body, expected_routing) triple into one
 | f014 | Upgrading Pro to Team — proration question | billing | Clear-correct | Plan upgrade mechanics |
 | f015 | Card declined, payment method update | billing | Clear-correct | Billing mechanics |
 | f016 | Where are RLS docs with JWT custom claims? | general | Clear-correct | Pure docs lookup ("a pointer is fine") |
-| **f017** | **Feature request: pgvector queries with HNSW pre-filter** | **general** | **Boundary-ambiguous** | **Feature request framing pulls toward `general`, but the technical pgvector + HNSW depth pulls toward `engineering`. ADR-0002 already documents this as the systematic-miss cluster (5/100 ci-nightly misroutes). The ambiguity is real, not a labeling error.** |
+| **f017** | **Feature request: pgvector queries with HNSW pre-filter** | **general** | **Boundary-ambiguous** | **Feature request framing pulls toward `general`, but the technical pgvector + HNSW depth pulls toward `engineering`. ADR-0002 already documents this as the systematic-miss cluster (5/100 ci-full misroutes). The ambiguity is real, not a labeling error.** |
 | f018 | Invite teammate read-only role | general | Clear-correct | Onboarding clarification ("is there a feature I'm missing"); not a billing seat-management question |
 | f019 | SSO blank page (post-relabel: engineering) | engineering | Clear-correct | Post-ADR-0002 relabel: two coworkers blocked, multi-browser tested. Service bug. |
 | f020 | Just wanted to say thanks — Realtime broadcast | general | Clear-correct | Pure feedback, no actionable routing question |
@@ -60,7 +60,7 @@ For each fixture, classify the (subject, body, expected_routing) triple into one
 
 ## What this confirms (concordance with eval)
 
-The audit independently identifies **f017** as the lone boundary-ambiguous fixture in the seed corpus. This is exactly the cluster the eval flagged as the systematic-miss source (5/100 ci-nightly misroutes for `general` routing concentrate on f017 and its synthesizer-augmented variations). The audit method validated: it found what the eval already showed, by independent reasoning, before consulting eval results.
+The audit independently identifies **f017** as the lone boundary-ambiguous fixture in the seed corpus. This is exactly the cluster the eval flagged as the systematic-miss source (5/100 ci-full misroutes for `general` routing concentrate on f017 and its synthesizer-augmented variations). The audit method validated: it found what the eval already showed, by independent reasoning, before consulting eval results.
 
 This is what good ground-truth audit looks like — the data quality assessment should agree with the systematic patterns the eval surfaces, not contradict them. If the audit had flagged different fixtures than the eval, that would be a sign one of the two had drifted.
 
@@ -79,7 +79,7 @@ Filing as known, non-blocking:
 
 ## Methodological note
 
-This audit explicitly avoids the **post-hoc-label-fix-to-pass-thresholds** anti-pattern (which would defeat ADR-0001's pre-registration discipline). The audit was run **after** the latest ci-nightly metrics were already locked in (`eval/reports/ci-nightly-1777601490246.json`). No fixture is being relabeled as a result of this audit. f017 stays `general` because the audit found the label is *defensible*, not *correct-by-default*. Any future relabel would need its own ADR with audit trail (the precedent is ADR-0002).
+This audit explicitly avoids the **post-hoc-label-fix-to-pass-thresholds** anti-pattern (which would defeat ADR-0001's pre-registration discipline). The audit was run **after** the latest ci-full metrics were already locked in (`eval/reports/ci-full-1777601490246.json`). No fixture is being relabeled as a result of this audit. f017 stays `general` because the audit found the label is *defensible*, not *correct-by-default*. Any future relabel would need its own ADR with audit trail (the precedent is ADR-0002).
 
 ## References
 
@@ -87,4 +87,4 @@ This audit explicitly avoids the **post-hoc-label-fix-to-pass-thresholds** anti-
 - `docs/decisions/0001-manifest-v1-stays-uncalibrated.md` — pre-registration discipline this audit respects
 - `docs/decisions/0002-f019-seed-relabel.md` — precedent for ADR-mediated label corrections
 - `docs/decisions/0005-fixture-corpus-data-quality-audit.md` — the locked decision based on this audit
-- `eval/reports/ci-nightly-1777601490246.json` — the metrics this audit was run against
+- `eval/reports/ci-full-1777601490246.json` — the metrics this audit was run against

@@ -18,7 +18,7 @@ State of the v0.1.0 build at end of the implementation session. Plan reference: 
 - Eval runner (T24) ✓
 - 20 hand-curated ci-fast fixtures (T25) ✓
 - Synthesizer (T26 partial — see § Awaiting operator action)
-- GitHub Actions workflows: ci-fast + ci-nightly + publish (T27) ✓
+- GitHub Actions workflows: ci-fast + ci-full + publish (T27) ✓
 - 4 remaining reference pages (T28) ✓
 - `docs/writeup.md` headline narrative (T29) ✓
 - v0.1.0 build entry points + dual ESM/CJS dist (T30 Step 1) ✓
@@ -34,7 +34,7 @@ State of the v0.1.0 build at end of the implementation session. Plan reference: 
 
 These steps were deliberately **not** auto-executed because they spend money, publish public artifacts, or modify shared systems.
 
-### 1. Anthropic auth + ci-nightly fixture generation (blocks T26 + part of T29)
+### 1. Anthropic auth + ci-full fixture generation (blocks T26 + part of T29)
 
 The synthesizer at `eval/synthesize-fixtures.ts` is built and clean, but the available `ANTHROPIC_API_KEY` (in both `.env` and shell env) returned 401 against `claude-haiku-4-5`. Both keys had `sk-ant-api*` prefix and 108-char length — format-correct, but the workspace appears revoked or deactivated.
 
@@ -43,19 +43,19 @@ To unblock:
 # After restoring a working sk-ant-api* key in .env:
 cd ~/Dev/supabase-realtime-skill
 bun run eval/synthesize-fixtures.ts        # ~$0.24, 2-4 min
-ls fixtures/ci-nightly/ | wc -l            # expect 100
+ls fixtures/ci-full/ | wc -l            # expect 100
 # spot-check 10 random files; commit
-git add fixtures/ci-nightly/
-git commit -m "test(fixtures): ci-nightly n=100 (spot-checked)"
+git add fixtures/ci-full/
+git commit -m "test(fixtures): ci-full n=100 (spot-checked)"
 ```
 
-### 2. ci-nightly eval run (T26 Step 3 + T29 placeholder fill)
+### 2. ci-full eval run (T26 Step 3 + T29 placeholder fill)
 
-Once `fixtures/ci-nightly/` is populated, the operator runs:
+Once `fixtures/ci-full/` is populated, the operator runs:
 ```bash
-bun run eval/runner.ts ci-nightly
+bun run eval/runner.ts ci-full
 # Wallclock ~30 min, cost ~$2-3 (100 trials × haiku-4-5 + one branch)
-# Writes eval/reports/ci-nightly-<ts>.json
+# Writes eval/reports/ci-full-<ts>.json
 ```
 
 The 4-metric report fills in the `_pending_` cells in `docs/writeup.md` § 4. `latency_to_first_event_ms` p95 already has a credible value (438ms from T9 spike); the other three (missed_events_rate, spurious_trigger_rate, agent_action_correctness) need the worked-example run.
@@ -116,8 +116,8 @@ eval/
   triage-agent.ts          T21 — worked-example agent
   metrics.ts               T22 — 4 metrics + threshold checker
   runner.ts                T24 — fixtures × triage × manifest gate
-  synthesize-fixtures.ts   T26 — LLM-augment ci-fast → ci-nightly (BLOCKED on Anthropic auth)
-  reports/                 (gitignored) ci-fast/ci-nightly outputs
+  synthesize-fixtures.ts   T26 — LLM-augment ci-fast → ci-full (BLOCKED on Anthropic auth)
+  reports/                 (gitignored) ci-fast/ci-full outputs
 
 tests/
   fast/                    33 offline tests, 8 files
@@ -126,7 +126,7 @@ tests/
 
 fixtures/
   ci-fast/                 20 hand-curated tickets, 4 routings × 5 cases
-  ci-nightly/              (empty — awaits T26 unblock)
+  ci-full/              (empty — awaits T26 unblock)
 
 references/                8 pages — predicates, replication-identity, rls-implications,
                            presence-deferred, pgvector-composition, eval-methodology,
@@ -141,7 +141,7 @@ supabase/
   functions/mcp/           Edge Function entry (deploys; tool-routing pending)
   migrations/              support_tickets schema (applied to transient branches by runner)
 
-.github/workflows/         ci-fast + ci-nightly + publish
+.github/workflows/         ci-fast + ci-full + publish
 
 manifest.json              v1.0.0 pre-registered thresholds
 SKILL.md                   v1, three triggers + tools at a glance

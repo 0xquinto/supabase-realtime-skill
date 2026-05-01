@@ -3,7 +3,7 @@
 **Date:** 2026-04-30
 **Status:** Accepted
 **Decider:** Diego Gomez
-**Context:** ci-nightly v0.1.1 (post-pgvector) gate fails on `action_correctness.ci_low`; f019 is one of two seed clusters driving the failure. ADR-0001 frames the manifest amendment policy.
+**Context:** ci-full v0.1.1 (post-pgvector) gate fails on `action_correctness.ci_low`; f019 is one of two seed clusters driving the failure. ADR-0001 frames the manifest amendment policy.
 
 ## The seed under review
 
@@ -20,11 +20,11 @@
 }
 ```
 
-Plus 4 LLM-augmented variations in `fixtures/ci-nightly/` (`n091`–`n095`).
+Plus 4 LLM-augmented variations in `fixtures/ci-full/` (`n091`–`n095`).
 
 ## What the eval caught
 
-In every ci-nightly run since pgvector was wired, all 5 f019 trials route to `engineering` (4 trials) or `urgent` (1 trial). The agent — running claude-haiku-4-5 over a 5-shot pgvector retrieval — never picks `general`. Looking at the resolved-corpus neighbors retrieved for these trials, the model is correctly identifying that "two coworkers blocked from logging in" is structurally similar to other service-failure tickets in the corpus.
+In every ci-full run since pgvector was wired, all 5 f019 trials route to `engineering` (4 trials) or `urgent` (1 trial). The agent — running claude-haiku-4-5 over a 5-shot pgvector retrieval — never picks `general`. Looking at the resolved-corpus neighbors retrieved for these trials, the model is correctly identifying that "two coworkers blocked from logging in" is structurally similar to other service-failure tickets in the corpus.
 
 ## Why the original label was wrong
 
@@ -38,7 +38,7 @@ The agent's behavior here is a feature, not a flaw. A triage system that routes 
 
 ## Decision
 
-Update `expected_routing` from `"general"` to `"engineering"` in all 6 affected fixtures (ci-fast `f019-gen-account-sso-redirect.json` + ci-nightly `n091`–`n095`). Leave the file/id naming with `-gen-` intact — renaming would erase the audit trail of which seeds were originally mislabeled.
+Update `expected_routing` from `"general"` to `"engineering"` in all 6 affected fixtures (ci-fast `f019-gen-account-sso-redirect.json` + ci-full `n091`–`n095`). Leave the file/id naming with `-gen-` intact — renaming would erase the audit trail of which seeds were originally mislabeled.
 
 Embeddings are not regenerated: the ticket text (subject + body) is unchanged, only the ground-truth label.
 
@@ -48,8 +48,8 @@ ADR-0001's pre-registration discipline prohibits *changing thresholds* after see
 
 The honest disclosure path:
 - This ADR documents the relabel and the reasoning, in the repo, before re-running the eval.
-- The git history preserves the original labels (commit `2b95b35` for ci-fast seeds, `d705b17` for ci-nightly).
-- The writeup will reference this ADR when reporting the post-relabel ci-nightly results.
+- The git history preserves the original labels (commit `2b95b35` for ci-fast seeds, `d705b17` for ci-full).
+- The writeup will reference this ADR when reporting the post-relabel ci-full results.
 
 ## Why f017 stays as-is
 
@@ -59,7 +59,7 @@ The 5/5 f017 variations will continue to misroute under v0.1.x. That's accepted 
 
 ## Predicted effect
 
-Pre-relabel ci-nightly (`eval/reports/ci-nightly-1777596701118.json`):
+Pre-relabel ci-full (`eval/reports/ci-full-1777596701118.json`):
 - action_correctness: 90/100 = 0.900, CI low 0.826, FAIL on `action_correctness_ci_low_min: 0.85`
 
 Post-relabel prediction:
@@ -72,6 +72,6 @@ If the prediction misses (the agent now over-routes elsewhere), this ADR remains
 ## References
 
 - ADR-0001 — manifest v1.0.0 pre-registration discipline; explains why thresholds aren't being amended
-- `eval/reports/ci-nightly-1777596701118.json` — the run this ADR responds to
+- `eval/reports/ci-full-1777596701118.json` — the run this ADR responds to
 - `fixtures/ci-fast/f019-gen-account-sso-redirect.json` — the seed under review
 - `playbook/PLAYBOOK.md` § 9 — pre-registration vs. ground-truth hygiene

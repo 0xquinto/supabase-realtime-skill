@@ -25,10 +25,10 @@ bun run build                        # tsup → dist/{client,server}/index.{js,c
 
 bun run eval/spike-latency.ts        # n=20 latency check (Phase 1 gate)
 bun run eval/runner.ts ci-fast       # fixtures × triage × manifest gate (~$0.50, 5 min)
-bun run eval/runner.ts ci-nightly    # n=100 (~$2-3, 30 min)
+bun run eval/runner.ts ci-full    # n=100 (~$2-3, 30 min)
 
 # Multi-model probe (default: claude-haiku-4-5):
-EVAL_TRIAGE_MODEL=claude-sonnet-4-6 bun run eval/runner.ts ci-nightly
+EVAL_TRIAGE_MODEL=claude-sonnet-4-6 bun run eval/runner.ts ci-full
 ```
 
 Operator setup: [`references/edge-deployment.md`](references/edge-deployment.md). Requires Supabase Pro + a dedicated host project + a fine-grained PAT.
@@ -47,7 +47,7 @@ Operator setup: [`references/edge-deployment.md`](references/edge-deployment.md)
 | `tests/smoke/_helpers/` | `ResilientApiClient`, `fetchProjectKeys` — reused by `eval/` |
 | `eval/` | spike-latency, triage-agent, metrics, runner, synthesize-fixtures |
 | `fixtures/ci-fast/` | 20 hand-curated tickets — the merge gate |
-| `fixtures/ci-nightly/` | 100 (20 seeds + 80 LLM-augmented; spot-checked) |
+| `fixtures/ci-full/` | 100 (20 seeds + 80 LLM-augmented; spot-checked) |
 | `references/` | 9 skill consumer reference pages (linked from SKILL.md) |
 | `supabase/functions/mcp/` | Edge Function entry (deploys; tool-routing pending) |
 | `supabase/migrations/` | support_tickets schema for the worked example |
@@ -101,7 +101,7 @@ The `!` triggers on import — fails typecheck-driven imports, fails CI runs wit
 
 ### GH Actions: gate on secrets via step output, not job-level `if:`
 
-`secrets.X` is forbidden in job-level `if:` (security restriction). For workflows that should skip cleanly when eval secrets are absent, use a first step that writes `secrets=true|false` to `$GITHUB_OUTPUT`, then gate subsequent steps on `steps.have.outputs.secrets == 'true'`. Pattern lives in `.github/workflows/ci-nightly.yml` + `ci-fast.yml`'s eval job.
+`secrets.X` is forbidden in job-level `if:` (security restriction). For workflows that should skip cleanly when eval secrets are absent, use a first step that writes `secrets=true|false` to `$GITHUB_OUTPUT`, then gate subsequent steps on `steps.have.outputs.secrets == 'true'`. Pattern lives in `.github/workflows/ci-full.yml` + `ci-fast.yml`'s eval job.
 
 ### npm publish uses OIDC, not `NPM_TOKEN`
 
@@ -137,12 +137,12 @@ Don't mark an ADR `Accepted` until the operator explicitly decides. `Proposed` i
 
 ## Status
 
-v0.1.x shipped. Latest ci-nightly: **99/100 action_correctness, CI low 0.946** (Sonnet 4.6, ADR-0009); Haiku 4.5 hits 96/100 post-f019-relabel (ADR-0006). Manifest gate passes on rate AND CI low; mechanical Wilson upper-CI bounds remain until n=300 (v2.0.0 manifest, ADR-0007).
+v0.1.x shipped. Latest ci-full: **99/100 action_correctness, CI low 0.946** (Sonnet 4.6, ADR-0009); Haiku 4.5 hits 96/100 post-f019-relabel (ADR-0006). Manifest gate passes on rate AND CI low; mechanical Wilson upper-CI bounds remain until n=300 (v2.0.0 manifest, ADR-0007).
 
 **Shipped:** npm package published as `supabase-realtime-skill` (`v0.1.0` + `v0.1.1` via OIDC Trusted Publisher); Edge Function deployed and live-verified (JSON-RPC `tools/list` round-trips); 9 ADRs filed exercising the pre-registration loop in all three outcomes (accept/partial/reject).
 
-**CI:** `ci-fast` runs every push (typecheck + lint + 49 fast tests, ~1 min, free). `ci-nightly` is **manual-only** (`workflow_dispatch`) — daily cron was dropped on 2026-05-01 (~$60-90/mo of API spend reproducing identical numbers; methodology evidence is the workflow file + on-demand trigger).
+**CI:** `ci-fast` runs every push (typecheck + lint + 49 fast tests, ~1 min, free). `ci-full` is **manual-only** (`workflow_dispatch`) — daily cron was dropped on 2026-05-01 (~$60-90/mo of API spend reproducing identical numbers; methodology evidence is the workflow file + on-demand trigger). The tier was renamed from `ci-nightly` → `ci-full` on 2026-05-01 to stop the name from claiming a schedule it doesn't have; same workflow, same fixtures, just an honest label.
 
 **Operator follow-ups:**
 1. T31 — file issue on `supabase/agent-skills` (decide: as-drafted, reshape per ADR-0004, or skip).
-2. (Optional) Set `EVAL_*` repo secrets if scheduled `ci-nightly` is ever re-enabled.
+2. (Optional) Set `EVAL_*` repo secrets if `ci-full` is invoked on demand.

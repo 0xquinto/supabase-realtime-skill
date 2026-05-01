@@ -3,7 +3,7 @@
 // First end-to-end validation of the bounded-watch primitive against a real
 // Supabase branch. Spike-success gate (T7 in the build plan).
 //
-// Single-trial floor only — ci-nightly (T9) enforces p95 < 2000ms across
+// Single-trial floor only — ci-full (T9) enforces p95 < 2000ms across
 // n=100. This test's job is to prove the primitive works against real
 // Postgres + Realtime under a real branch's pooler.
 //
@@ -98,7 +98,7 @@ describe.skipIf(!SHOULD_RUN)("watch_table smoke (real branch)", () => {
           // matchedAt - matchedAt = 0 and the assertion below passes vacuously.
           expect(insertTimes.length).toBeGreaterThan(0);
           // Latency is "time from the most-recent committed insert before
-          // match → match arrival". This is the metric ci-nightly should
+          // match → match arrival". This is the metric ci-full should
           // measure once warmed.
           const lastInsertBeforeMatch = insertTimes.filter((t) => t <= matchedAt).pop();
           const steadyStateLatency =

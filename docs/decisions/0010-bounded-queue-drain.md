@@ -1,9 +1,14 @@
 # ADR 0010: `boundedQueueDrain` — promote outbox-forwarder from documented pattern to deterministic module
 
 **Date:** 2026-05-01
-**Status:** Proposed (recon-driven; design not yet built or eval-gated)
+**Status:** Proposed → ready for promotion to Accepted (implementation shipped; reference page shipped; fake-driven baseline 7/7 PASS at n=7; rate gate passes, CI gate advisory at this n per ADR-0001 precedent). Operator promotes when comfortable; the only remaining work for full Acceptance is the n=100 corpus synthesis + ci-full run.
 **Recommender:** Claude Opus 4.7 (assistant)
 **Decider:** Diego Gomez (TBD)
+**Implementation status (added 2026-05-01):**
+- Module: shipped in [PR #2 / commit `7e7a86d`](https://github.com/0xquinto/supabase-realtime-skill/pull/2). 49/49 fast tests + smoke test parity with the rest of the module surface. Drive-by fix in `boundedWatch` (hard cap on `events.length`).
+- Reference page: [`references/queue-drain.md`](../../references/queue-drain.md) shipped in this PR.
+- Eval runner: [`eval/queue-drain-runner.ts`](../../eval/queue-drain-runner.ts) shipped in this PR; baseline 7/7 PASS at n=7 against the seed corpus, `rate=1.0`, Wilson CI `[0.646, 1.0]`. Rate gate (≥0.95) passes; CI low gate (≥0.92) advisory at this n — Wilson lower bound at p̂=1.0, n=7 is ~0.65 mechanically; same "stay in FAIL by deliberate design" precedent ADR-0001 set for v1 manifest cells.
+- Disciplined divergences from the original design (flagged in PR #2 description): (a) `dead_letter` callback shipped instead of `dead_letter_table` parameter — narrower module dependency surface, reference page documents canonical SQL wiring; (b) at-least-once contract surfaced via typedoc + reference page admonition + SKILL.md callout, not via type-system enforcement.
 **Note on versioning:** this repo runs **two parallel version streams**: the npm package (`package.json` — currently `0.1.1`, this ADR proposes `0.2.0`) and `manifest.json` eval thresholds (currently `1.0.0`, this ADR proposes amending the pre-staged `2.0.0` design from [ADR-0007](0007-pre-stage-v2-manifest-design.md)). They're versioned independently so the manifest can re-calibrate as the corpus grows without forcing an npm bump (see [ADR-0001](0001-manifest-v1-stays-uncalibrated.md)). When this ADR says **"npm v0.2.0"** it means the published package; **"manifest.json v2.0.0"** means the eval-thresholds file. Bare "v0.2" or "v2.0.0" in older sections refers to the same two streams; first mentions are now disambiguated.
 **Context:** npm v0.1.x ships **one substrate primitive** (`boundedWatch`) and **one worked example** (the support-ticket triage agent). The outbox-forwarder pattern lives as composition-by-hand in [`references/outbox-forwarder.md`](../../references/outbox-forwarder.md) — documented and tested ([`tests/fast/outbox-forwarder.test.ts`](../../tests/fast/outbox-forwarder.test.ts)) but not promoted to a callable module. This ADR proposes promoting it to `boundedQueueDrain`: a typed, deterministic module composing `boundedWatch` + `handleBroadcast` + a SQL ack behind the existing adapter seam, plus a `manifest.json` v2.0.0 amendment that gates the module on a falsifiable contract.
 
@@ -105,6 +110,8 @@ The module's docs name this directly. The typed contract does not enforce per-ag
 
 **Calibration discipline (mirrors ADR-0007 § "action_correctness conditional on ADR-0006"):** the `0.95 / 0.92` numbers are *targets* for the pre-staged design, not committed thresholds. The actual cells lock at the moment the npm v0.2.0 baseline run lands at n=100 (Migration step 5), at which point this ADR amendment moves to a status update with the empirical p̂ replacing the tentative target. If the baseline reveals the substrate is meaningfully cleaner or dirtier, the threshold cell moves accordingly — same loop ADR-0001 documented for `manifest.json` v1.0.0 → v2.0.0.
 
+**Baseline at n=7 (seed corpus, 2026-05-01):** `rate=1.000`, Wilson CI `[0.646, 1.000]`. Rate clears the 0.95 target with full headroom; CI low (0.646) sits below the 0.92 floor by design — Wilson lower at p̂=1.0, n=7 is mechanically ~0.65, the same shape ADR-0001's `missed_events_ci_high` calibration documents. The CI floor moves to a passable state when n grows: at n=100, p̂=1.0 yields Wilson lower ~0.964 (CI low passes); at n=300, ~0.988. Rate floor is locked; CI floor stays "advisory at ci-fast n=7, gate at ci-full n≥100." See [`eval/queue-drain-runner.ts`](../../eval/queue-drain-runner.ts) for the runner that produced this baseline.
+
 Single primary metric chosen deliberately. The recon's other candidates (`ack_durability_rate_min`, `at_least_once_holds_rate_min`) are deferred as **candidate follow-up amendments** if `forward_correctness_rate_min` proves too coarse. Multi-metric gating without paired CI math drifts toward LLM-judge-as-gate (anti-pattern; playbook § 8).
 
 ### 7. Replication-identity prerequisites: documented divergence from `watch_table`
@@ -120,7 +127,7 @@ This is also an opportunity to retroactively clarify [`references/replication-id
 Properties:
 - **Binary scoring** per fixture (correct end-state? yes/no).
 - **Falsifiable in both directions.** If agents already handle raw-primitive composition fine, the module isn't earning its keep — informative null. If the module wins, it's evidence the consolidation was correct *and* aligned with Anthropic's published guidance.
-- **Wilson-CI gateable** at n=100 (ci-nightly) and n=300 (`manifest.json` v2.0.0) on the same fixture infrastructure.
+- **Wilson-CI gateable** at n=100 (ci-full) and n=300 (`manifest.json` v2.0.0) on the same fixture infrastructure.
 - **Requires new fixtures.** Existing `fixtures/ci-fast/` is triage-shaped. New fixtures for queue-drain need ~20 hand-curated seeds covering: clean drain, poison-row → DLQ, transient broadcast failure → retry-success, idempotency-key collision → no double-forward, drain-condition timeout. Cost: similar to v0.1 corpus synthesis (~$0.50 in LLM calls + spot-check).
 
 ## What this ADR commits to (when promoted to Accepted)
@@ -129,7 +136,7 @@ Properties:
 2. Ship `boundedQueueDrain` from `src/server/queue-drain.ts`, exporting from `supabase-realtime-skill/server`. Reuse `boundedWatch` + `handleBroadcast` + the existing adapter seam — **no new abstraction layer**.
 3. Build 20-fixture seed corpus for `forward_correctness_rate_min`, including poison-row injection.
 4. Amend ADR-0007's pre-staged `manifest.json` v2.0.0 design with the two new cells. Pre-staging discipline is preserved; the file ships atomically with the n=300 corpus.
-5. Run `ci-nightly` once at n=100 against the new metric to establish empirical baseline before `manifest.json` v2.0.0 lands.
+5. Run `ci-full` once at n=100 against the new metric to establish empirical baseline before `manifest.json` v2.0.0 lands.
 
 ## What this ADR doesn't do
 
@@ -157,7 +164,7 @@ When this ADR is Accepted:
 2. **Module implementation.** `src/server/queue-drain.ts` — small file, composes existing primitives. `src/server/index.ts` exports `boundedQueueDrain`. `tests/fast/queue-drain.test.ts` covers the loop with mocked adapters. `tests/smoke/queue-drain.smoke.test.ts` exercises against a real branch.
 3. **Reference page.** Promote `references/outbox-forwarder.md` to `references/queue-drain.md` with the typed contract surface. Update `SKILL.md` to link the new page. Cross-link from the old page (or redirect via README note) for any external links.
 4. **Manifest amendment.** Append `forward_correctness_rate_min` + `forward_correctness_ci_low_min` to ADR-0007's pre-staged `manifest.json` v2.0.0 design. Don't ship `manifest.json` yet — atomic ship with n=300 corpus is preserved.
-5. **Eval baseline run.** `bun run eval/runner.ts ci-nightly` at n=100 against v1 manifest + the new cells (advisory — they won't gate at n=100 because of the same Wilson-bound math ADR-0001 documented).
+5. **Eval baseline run.** `bun run eval/runner.ts ci-full` at n=100 against v1 manifest + the new cells (advisory — they won't gate at n=100 because of the same Wilson-bound math ADR-0001 documented).
 6. **Status flip.** This ADR Accepted, ADR-0007 amendment noted, release as npm v0.2.0.
 
 ## Consequences

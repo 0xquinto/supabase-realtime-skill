@@ -19,7 +19,7 @@ These files were copied verbatim from `supabase-mcp-evals` at SHA `ddacb77` (202
 
 - **Designing or sizing a slice/eval:** `PLAYBOOK.md` § 8 (anti-patterns) + § 9 (statistical-design heuristics) + `research/construct-validity.md` Target 1 (Bean's 8 checklist).
 - **Adding a metric to `eval/metrics.ts`:** `PLAYBOOK.md` § 9 + `research/statistical-design.md`.
-- **Generating fixtures:** `research/dataset-construction.md` (note: the lesson "synthetic data before a hand-crafted seed" is why `fixtures/ci-fast/` is hand-curated and `fixtures/ci-nightly/` is hand-seed + LLM-augmented).
+- **Generating fixtures:** `research/dataset-construction.md` (note: the lesson "synthetic data before a hand-crafted seed" is why `fixtures/ci-fast/` is hand-curated and `fixtures/ci-full/` is hand-seed + LLM-augmented).
 - **Eval harness design questions:** `research/harness-engineering.md`.
 
 ## Cleanup pass policy

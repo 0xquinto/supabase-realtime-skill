@@ -139,9 +139,9 @@ Pre-registered thresholds in `manifest.json` (version 1.0.0, registered 2026-04-
 | `spurious_trigger_rate` | < 2% (CI high < 3%) | — | 0% (CI 3.7%) | 0% (CI 3.7%) | **0%** (CI high 3.7%) | rate PASS, CI FAIL |
 | `agent_action_correctness` | ≥ 90% (CI low ≥ 85%) | — | 87% (CI 79%) | 90% (CI 82.6%) | **94%** (CI low 87.5%) | **PASS** |
 
-Latest run: `eval/reports/ci-nightly-1777601490246.json`. Single transient branch, ~30 min wallclock, 100 fixtures (20 hand-curated seeds × 5 variations each across 4 routings), pgvector retrieval against a 32-row hand-curated resolved-tickets corpus seeded into the transient branch with pre-computed embeddings (Xenova/all-MiniLM-L6-v2, halfvec(384)).
+Latest run: `eval/reports/ci-full-1777601490246.json`. Single transient branch, ~30 min wallclock, 100 fixtures (20 hand-curated seeds × 5 variations each across 4 routings), pgvector retrieval against a 32-row hand-curated resolved-tickets corpus seeded into the transient branch with pre-computed embeddings (Xenova/all-MiniLM-L6-v2, halfvec(384)).
 
-The spike-latency number is from `eval/spike-latency.ts` (committed `4f51800`): n=20 trials on a single long-lived subscription. The ci-nightly p95 is higher because each trial includes the agent's full tool-use loop (LLM call to claude-haiku-4-5 + pgvector retrieval + write-back), not just the event-delivery hop. The substrate (Realtime delivery) is the smaller share.
+The spike-latency number is from `eval/spike-latency.ts` (committed `4f51800`): n=20 trials on a single long-lived subscription. The ci-full p95 is higher because each trial includes the agent's full tool-use loop (LLM call to claude-haiku-4-5 + pgvector retrieval + write-back), not just the event-delivery hop. The substrate (Realtime delivery) is the smaller share.
 
 **Four findings from the v0.1.0 → v0.1.2 gate journey:**
 
@@ -204,7 +204,7 @@ Both findings are *operational discipline shipped with the artifact* — agents 
 ## Next steps
 
 - f017 cluster (5/100 misroutes): the remaining systematic gap after the v0.1.2 relabel. **Negative result:** tried prompt-tightening with explicit category definitions; accuracy unchanged, p95 latency rose to 2088ms (over budget). Plausible v0.2 paths: richer resolved corpus with technically-flavored `general` examples that bias retrieval correctly, or model swap from haiku-4-5 to a stronger router. ADR-0002 documents why f017 is genuinely `general` despite the technical surface.
-- Bump ci-nightly to n=300 — makes Wilson CI lower bound on action_correctness reachable (~0.860 at p̂=0.90) and tightens CI upper on missed/spurious to ~0.012. v2.0.0 manifest amendment with rationale; pre-registered v1.0.0 stays as-is per ADR-0001.
+- Bump ci-full to n=300 — makes Wilson CI lower bound on action_correctness reachable (~0.860 at p̂=0.90) and tightens CI upper on missed/spurious to ~0.012. v2.0.0 manifest amendment with rationale; pre-registered v1.0.0 stays as-is per ADR-0001.
 - Ship `.d.ts` types — current `bun build` doesn't emit declarations, so npm consumers get `any`. Switch to `tsup` (or add a `tsc -d --emitDeclarationOnly` pass).
 - Open issue on [`supabase/agent-skills`](https://github.com/supabase/agent-skills/issues) proposing this as a `realtime` sub-skill.
 - v2 design pass on Presence semantics for agents.

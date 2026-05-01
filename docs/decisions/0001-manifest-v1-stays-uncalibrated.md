@@ -3,11 +3,11 @@
 **Date:** 2026-04-30
 **Status:** Accepted
 **Decider:** Diego Gomez
-**Context:** First v0.1.0 ci-nightly run completed; pre-registered manifest gate FAILED.
+**Context:** First v0.1.0 ci-full run completed; pre-registered manifest gate FAILED.
 
 ## Context
 
-`manifest.json` v1.0.0 was registered before the v0.1.0 ci-nightly run with these thresholds:
+`manifest.json` v1.0.0 was registered before the v0.1.0 ci-full run with these thresholds:
 
 | Threshold | Value | Reasoning at registration time |
 |---|---|---|
@@ -19,7 +19,7 @@
 | `action_correctness_rate_min` | 0.90 | Industry-typical triage agent baseline |
 | `action_correctness_ci_low_min` | 0.85 | 5pp slack below the point-estimate floor |
 
-The first ci-nightly run (n=100, single transient branch, ~30 min wallclock) produced:
+The first ci-full run (n=100, single transient branch, ~30 min wallclock) produced:
 
 | Metric | Result | Threshold check |
 |---|---|---|
@@ -72,10 +72,10 @@ Pre-registration discipline is the load-bearing piece of the eval methodology (s
 
 Two amendments planned:
 
-- **Bump `ci-nightly.n` from 100 → 300.** This makes `missed_events_ci_high_max: 0.01` mechanically reachable (Wilson upper bound at n=300, p̂=0 is ~0.012, just above; n=400 yields ~0.0093). Also tightens `spurious_trigger` upper bound to ~0.012.
+- **Bump `ci-full.n` from 100 → 300.** This makes `missed_events_ci_high_max: 0.01` mechanically reachable (Wilson upper bound at n=300, p̂=0 is ~0.012, just above; n=400 yields ~0.0093). Also tightens `spurious_trigger` upper bound to ~0.012.
 - **Either keep CI bounds as-is** (relying on the n bump) **or relax them** (`missed_events_ci_high_max: 0.04`, `spurious_trigger_ci_high_max: 0.04`) **with explicit rationale.** Relaxing without rationale is anti-pattern; the rationale here is "100 trials is the right cost ceiling for a daily nightly run; CI tightness is a function of n, not substrate quality."
 
-The choice between the two depends on whether ci-nightly cost (~$2-3 at n=100, scaling roughly linearly) is acceptable at $6-9 per run. v0.2 design pass decides.
+The choice between the two depends on whether ci-full cost (~$2-3 at n=100, scaling roughly linearly) is acceptable at $6-9 per run. v0.2 design pass decides.
 
 **3. action_correctness FAIL is a composition fix, not a manifest amendment.**
 
@@ -91,14 +91,14 @@ The 0.90 / 0.85 thresholds stay. v0.2 work item is fixing the `general` label bo
 
 **Silently lower `missed_events_ci_high_max` to 0.04 and `spurious_trigger_ci_high_max` to 0.04 in v1.0.0.** Rejected: defeats pre-registration. Even if mechanically defensible, the change would not be disclosed in a way that survives churn.
 
-**Ship v0.1.0 only after re-running ci-nightly at n=300.** Rejected: cost (~$6-9) and wallclock (~90 min) for a run whose substrate-finding outcome is already known from the n=100 result. Better to spend the budget on v0.2's seed-fix verification.
+**Ship v0.1.0 only after re-running ci-full at n=300.** Rejected: cost (~$6-9) and wallclock (~90 min) for a run whose substrate-finding outcome is already known from the n=100 result. Better to spend the budget on v0.2's seed-fix verification.
 
 **Drop CI-half thresholds entirely and gate only on point estimates.** Rejected: Wilson CIs are the discipline that distinguishes "0/100 might mean substrate clean OR small sample" from "100/300 is statistically clean." Removing CI gating removes the methodology's teeth.
 
 ## References
 
 - `manifest.json` v1.0.0 — the pre-registered file
-- `eval/reports/ci-nightly-1777590748222.json` — the run that produced this finding
+- `eval/reports/ci-full-1777590748222.json` — the run that produced this finding
 - `eval/metrics.ts` — Wilson CI implementation (verified against scipy.stats.binomtest in spec)
 - `playbook/PLAYBOOK.md` § 9 — statistical design choices (paired McNemar, Wilson CIs, why CI gating matters)
 - `references/eval-methodology.md` — Bean's construct-validity checklist (phenomenon-proxy gap)
