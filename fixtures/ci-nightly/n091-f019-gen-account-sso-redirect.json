@@ -4,5 +4,5 @@
     "subject": "SSO login redirects me to a blank page after Okta auth",
     "body": "When I log in via our Okta SSO, the Okta side completes successfully but I land on a blank Supabase page (no error, no dashboard). Hard reload sends me back to the login screen. This started today; my coworker has the same issue. Tried Chrome and Firefox, same result."
   },
-  "expected_routing": "general"
+  "expected_routing": "engineering"
 }

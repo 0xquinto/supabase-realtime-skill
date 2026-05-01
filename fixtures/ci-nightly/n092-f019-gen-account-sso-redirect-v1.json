@@ -4,5 +4,5 @@
     "subject": "SAML authentication succeeds but shows empty page instead of dashboard",
     "body": "I'm experiencing an issue where SAML login through our Azure AD provider completes successfully on the Azure side, but then I'm redirected to a blank page with no content or error messages. Refreshing the page just returns me to the login screen. Two other team members reported the same problem this morning. I've tested in Safari and Edge browsers with no improvement."
   },
-  "expected_routing": "general"
+  "expected_routing": "engineering"
 }

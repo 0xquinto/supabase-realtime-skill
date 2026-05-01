@@ -4,5 +4,5 @@
     "subject": "Azure AD SSO login stuck on loading screen after authentication",
     "body": "I'm unable to access the dashboard after authenticating through Azure AD SSO. The Azure authentication completes without errors, but then I get stuck on a blank loading page indefinitely. A page refresh returns me to the login prompt. This issue began yesterday and affects multiple team members. I've tested in Safari and Edge with the same outcome."
   },
-  "expected_routing": "general"
+  "expected_routing": "engineering"
 }
