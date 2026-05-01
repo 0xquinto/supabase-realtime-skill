@@ -105,7 +105,7 @@ The `!` triggers on import — fails typecheck-driven imports, fails CI runs wit
 | Operational finding from a spike | append to `docs/spike-findings.md` |
 | Skill consumer reference | `references/<topic>.md` (linked from `SKILL.md`) |
 | External research closing a playbook gap | `playbook/research/<topic>.md` (mirror supabase-mcp-evals' pre-registered targets pattern) |
-| Architecture decision | `docs/decisions/NNNN-<slug>.md` (currently empty — first ADR is your call) |
+| Architecture decision | `docs/decisions/NNNN-<slug>.md` (three ADRs filed: 0001 manifest pre-registration, 0002 f019 relabel, 0003 dual-path embedding) |
 | Engineering tactics | commit messages |
 
 ## Anti-patterns (from `playbook/PLAYBOOK.md` § 8)
@@ -122,11 +122,13 @@ The `!` triggers on import — fails typecheck-driven imports, fails CI runs wit
 
 ## Status
 
-Build complete (T1-T30 Step 1). Five operator follow-ups in `docs/ship-status.md`:
-1. Restore Anthropic auth → run `eval/synthesize-fixtures.ts`
-2. Run `eval/runner.ts ci-nightly` → fill 3 `_pending_` cells in `docs/writeup.md` § 4
-3. Wire `StreamableHTTPServerTransport` in `supabase/functions/mcp/index.ts`
-4. Push to GitHub remote + tag `v0.1.0` → publish to npm
-5. File issue on `supabase/agent-skills`
+v0.1.x build complete. ci-nightly n=100 passes on rate AND CI low for action_correctness (94% / 0.875); only mechanical Wilson upper-CI bounds remain (n=300 in v2.0.0 manifest collapses them — see ADR-0001).
 
-39+ commits on local `main`, no remote configured.
+**Done since `docs/ship-status.md` snapshot:** synthesizer fixtures (n=100 spot-checked, commit `d705b17`); ci-nightly run series (recency proxy → pgvector wiring → f019 relabel, latest `eval/reports/ci-nightly-1777601490246.json`); Edge Function transport wired (`StreamableHTTPServerTransport`, commit `2135168`) with in-process round-trip test; tsup migration ships `.d.ts`/`.d.cts` (commit `8ef463c`); spec deviation closed via dual-path embedding (commit `a9302d8`, ADR-0003).
+
+**Operator follow-ups remaining:**
+1. Push to GitHub remote + tag `v0.1.0` → publish to npm (workflow ready; `NPM_TOKEN` secret needed)
+2. Live-deploy verify: `supabase functions deploy mcp` + curl JSON-RPC `tools/list` against deployed URL
+3. File issue on `supabase/agent-skills` (T31 has body draft; needs #1 first so URLs resolve)
+
+51+ commits on local `main`, no remote configured.
