@@ -13,13 +13,32 @@ jobs:
       EVAL_HOST_PROJECT_REF: ${{ secrets.EVAL_HOST_PROJECT_REF }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
-      - run: bun install --frozen-lockfile
-      - run: bun run test:smoke
-      - run: bun run eval/runner.ts ci-nightly
-      - uses: actions/upload-artifact@v4
-        if: always()
+      # GitHub Actions disallows `secrets.X` in job-level `if:` for security;
+      # gate via a step output instead so unconfigured forks/repos cleanly skip
+      # the scheduled run rather than fail nightly with `process.exit(2)` from
+      # the runner's missing-env guard. Same pattern as ci-fast.yml's
+      # ci-fast-eval job.
+      - name: Check eval secrets
+        id: have
+        run: |
+          if [ -n "$EVAL_SUPABASE_PAT" ] && [ -n "$EVAL_HOST_PROJECT_REF" ] && [ -n "$ANTHROPIC_API_KEY" ]; then
+            echo "secrets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "secrets=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::eval secrets not configured; skipping ci-nightly"
+          fi
+      - if: steps.have.outputs.secrets == 'true'
+        uses: actions/checkout@v4
+      - if: steps.have.outputs.secrets == 'true'
+        uses: oven-sh/setup-bun@v1
+      - if: steps.have.outputs.secrets == 'true'
+        run: bun install --frozen-lockfile
+      - if: steps.have.outputs.secrets == 'true'
+        run: bun run test:smoke
+      - if: steps.have.outputs.secrets == 'true'
+        run: bun run eval/runner.ts ci-nightly
+      - if: ${{ always() && steps.have.outputs.secrets == 'true' }}
+        uses: actions/upload-artifact@v4
         with:
           name: ci-nightly-report
           path: eval/reports/
