@@ -123,7 +123,11 @@ describe("outbox-forwarder pattern", () => {
     const { adapter, emit } = makeAdapter();
     let attempts = 0;
     const sender = {
-      send: async (_input: { channel: string; event: string; payload: Record<string, unknown> }) => {
+      send: async (_input: {
+        channel: string;
+        event: string;
+        payload: Record<string, unknown>;
+      }) => {
         attempts++;
         throw new Error("upstream 503");
       },

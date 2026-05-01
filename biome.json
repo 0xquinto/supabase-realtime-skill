@@ -9,7 +9,9 @@
       "vendor",
       "supabase/functions",
       "supabase/.temp",
-      "fixtures/embeddings.json"
+      "fixtures/embeddings.json",
+      "fixtures/embeddings-minilm-384.json",
+      "fixtures/embeddings-openai-1536.json"
     ]
   },
   "linter": {

@@ -127,14 +127,21 @@ Methodology: 4 metrics, binary scoring, Wilson 95% CIs, McNemar paired-test comp
 
 ## Decisions + findings
 
-The judgment trail. Each ADR carries a falsifiable predicted effect.
+The judgment trail. Each ADR carries a falsifiable predicted effect or a documented constraint. The calibration sequence above is one ADR per step — every gain attributable to one named intervention with its own paper trail. See [`docs/decisions/`](docs/decisions/) for the live index.
 
-- [ADR-0001 — manifest v1 stays uncalibrated](docs/decisions/0001-manifest-v1-stays-uncalibrated.md). Wilson CI bounds at n=100 are mechanically unreachable; resist the urge to retroactively soften the gate. v2.0.0 manifest amendment deferred to a versioned bump.
-- [ADR-0002 — f019 seed relabel](docs/decisions/0002-f019-seed-relabel.md). The eval caught a mislabeled fixture (a service-bug ticket bucketed as `general`); relabeled with audit trail before re-running ci-nightly.
+- [ADR-0001 — manifest v1 stays uncalibrated](docs/decisions/0001-manifest-v1-stays-uncalibrated.md). Wilson CI bounds at n=100 are mechanically unreachable; resist the urge to retroactively soften the gate. v2.0.0 amendment deferred to a versioned bump.
+- [ADR-0002 — f019 seed relabel](docs/decisions/0002-f019-seed-relabel.md). The eval caught a mislabeled fixture (service-bug bucketed as `general`); relabeled with audit trail before re-running ci-nightly.
 - [ADR-0003 — dual-path embedding provider](docs/decisions/0003-dual-path-embedding-provider.md). Canonical schema stays spec-compliant `halfvec(1536)` with OpenAI; eval falls through to `halfvec(384)` Transformers.js when `OPENAI_API_KEY` unset. Closes the spec deviation.
-- [ADR-0004 — reshape T31 as user-feedback (proposed)](docs/decisions/0004-reshape-t31-as-user-feedback.md). The pre-T31 recon found the upstream maintainer's policy is monolith + references, not federation. Reshape pending operator decision.
+- [ADR-0004 — reshape T31 as user-feedback (proposed)](docs/decisions/0004-reshape-t31-as-user-feedback.md). Pre-T31 recon found the upstream maintainer's policy is monolith + references, not federation. Reshape pending operator decision.
+- [ADR-0005 — Mousavi data-quality audit](docs/decisions/0005-fixture-corpus-data-quality-audit.md). Per-fixture audit on the 20 ci-fast seeds; 5% flaw rate (only f017 boundary-ambiguous), below the 10% repair threshold. Concordant with the eval's systematic-miss findings.
+- [ADR-0006 — f017 cluster remediation](docs/decisions/0006-f017-cluster-remediation.md). Pre-registered prediction → ran → magnitude predictions missed by 1pp; hypothesis directionally supported. Honest "Accepted with caveats."
+- [ADR-0007 — pre-staged v2.0.0 manifest design](docs/decisions/0007-pre-stage-v2-manifest-design.md). n=300 with tightened CI gates. Locks the calibration loop's next move without yet shipping the file.
+- [ADR-0008 — comparative embedding eval (REJECTED)](docs/decisions/0008-comparative-embedding-eval-design.md). OpenAI 1536 vs MiniLM 384 paired-McNemar — byte-for-byte identical metrics at the Sonnet 4.6 model level. Hypothesis cleanly falsified; ADR-0003's dual-path is now empirically validated as a free choice.
+- [ADR-0009 — multi-model probe result](docs/decisions/0009-multi-model-probe-result.md). Sonnet 4.6 closes 2 of 3 residual f017 misses + reverses ADR-0006's f010 drift. 99/100, CI low 0.946. Validates ADR-0007's pre-staged v2.0.0 thresholds as conservative.
 
-Operational findings from the spike — 5s warm-up window, Deno bundler `.ts` extension policy, vitest workspace gotcha — live in [`docs/spike-findings.md`](docs/spike-findings.md).
+Operational findings from the spike — 5s Realtime warm-up window, Deno bundler `.ts` extension policy, vitest workspace gotcha — live in [`docs/spike-findings.md`](docs/spike-findings.md).
+
+The pre-T31 recon (whether to file the upstream issue) lives in [`docs/upstream/recon/2026-05-01-pre-t31-engagement-recon.md`](docs/upstream/recon/2026-05-01-pre-t31-engagement-recon.md). The Mousavi audit data lives in [`playbook/research/data-quality-audit.md`](playbook/research/data-quality-audit.md).
 
 ## Layout
 

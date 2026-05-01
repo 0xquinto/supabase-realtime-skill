@@ -11,3 +11,10 @@ supabase/.temp
 # then carve out spike-latency JSON logs (finding-quality, committed).
 logs/*
 !logs/spike-latency/
+
+# Per-provider embedding backups (each ~3.8 MiB; the canonical
+# fixtures/embeddings.json IS committed). Keep backups local-only —
+# regenerate via `OPENAI_API_KEY=... node eval/embed-corpus.mjs` (1536-dim)
+# or `node eval/embed-corpus.mjs` (384-dim Transformers.js).
+fixtures/embeddings-minilm-384.json
+fixtures/embeddings-openai-1536.json
