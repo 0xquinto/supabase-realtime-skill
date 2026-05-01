@@ -16,7 +16,7 @@ Origin context: [`docs/upstream/`](docs/upstream/README.md) carries the recon, s
 bun install
 cp .env.example .env                 # populate ANTHROPIC_API_KEY, EVAL_SUPABASE_PAT, EVAL_HOST_PROJECT_REF
 
-bun run test:fast                    # 33 offline tests (~1s)
+bun run test:fast                    # 49 offline tests (~1s)
 bun run test:smoke                   # 5 online smoke tests against real branches (~3 min, requires env)
 bun run typecheck                    # tsc --noEmit
 bun run lint                         # biome check
@@ -141,7 +141,7 @@ v0.1.x shipped. Latest ci-nightly: **99/100 action_correctness, CI low 0.946** (
 
 **Shipped:** npm package published as `supabase-realtime-skill` (`v0.1.0` + `v0.1.1` via OIDC Trusted Publisher); Edge Function deployed and live-verified (JSON-RPC `tools/list` round-trips); 9 ADRs filed exercising the pre-registration loop in all three outcomes (accept/partial/reject).
 
-**CI:** `ci-fast` runs every push (typecheck + lint + 33 fast tests, ~1 min, free). `ci-nightly` is **manual-only** (`workflow_dispatch`) — daily cron was dropped on 2026-05-01 (~$60-90/mo of API spend reproducing identical numbers; methodology evidence is the workflow file + on-demand trigger).
+**CI:** `ci-fast` runs every push (typecheck + lint + 49 fast tests, ~1 min, free). `ci-nightly` is **manual-only** (`workflow_dispatch`) — daily cron was dropped on 2026-05-01 (~$60-90/mo of API spend reproducing identical numbers; methodology evidence is the workflow file + on-demand trigger).
 
 **Operator follow-ups:**
 1. T31 — file issue on `supabase/agent-skills` (decide: as-drafted, reshape per ADR-0004, or skip).
