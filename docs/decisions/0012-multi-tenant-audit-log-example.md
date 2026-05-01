@@ -58,9 +58,9 @@ The composition side is harder. Tenant routing is ultimately string interpolatio
 - Fixtures with malformed `tenant_id` values
 - Partial-batch failure shapes that test substrate-level batching/no-batching guarantees
 
-That's a real eval, but it tests substrate batching properties (which `boundedQueueDrain`'s existing fast tests already cover) rather than tenant-isolation-specifically. **Adding `cross_tenant_leakage_rate_max` for composition correctness would be a re-labeling of work the queue-drain eval already does, not a new methodology contribution.**
+That's a real eval — narrower angles (agent compositions that derive `tenant_id` from JWT claims, batches that mix tenants, fan-out logic that picks a destination from a list) ARE falsifiable and would justify a cell. **The honest reason for deferring isn't "no falsifiable signal exists" — it's "we haven't done the fixture-design budget to commit to which adversarial shape the cell would gate on."** Forcing the cell now means picking a fixture shape under deadline pressure; ADR-0007's pre-registration discipline is "lock cells with rationale before fixtures, not the other way." Better to leave the slot open until the fixture-design pass justifies a specific shape.
 
-Honest cell deferred. ADR-0007's pre-staged v2.0.0 design unchanged. If a stronger angle emerges (e.g., a fuzz-style runner that generates adversarial consumer compositions), this ADR can be amended; for now, the smoke test is the binding evidence.
+ADR-0007's pre-staged v2.0.0 design unchanged. If/when a fixture-design pass produces a defensible adversarial shape (fuzz-generated `read_row` callbacks, multi-tenant batch corpora, etc.), this ADR can be amended; for now, the smoke test is the binding evidence and the cell stays open.
 
 This is a "predicted-and-revisited" ADR shape — the recon proposed the cell, drafting revealed the proxy-gap, ADR honest-defers. Different from the simpler "predicted-and-confirmed" pattern of ADR-0011.
 
@@ -84,7 +84,7 @@ That's a real API surface change with backward-compat questions (default to publ
 The recon recommended shipping a permanent `audit_events` migration in `supabase/migrations/`. This branch ships the schema as part of the smoke test (ephemeral), which is the falsifiable evidence; a permanent migration is a different artifact (a "bootstrap this and play" demo). Two reasons to defer:
 
 - **Scope discipline.** The portfolio piece is at "ship documentation + ADR + smoke test" stage; adding a runnable demo app is a real product surface that deserves its own design. Conflating ADR-0012's documentation ship with a demo-app ship buries each in the other.
-- **npm release coupling.** If we ship a demo migration that consumers are expected to use, that probably wants to align with an npm `0.2.0` release. The release headline ("multi-tenant patterns + worked example") is a stronger story when paired with substrate API additions (private-channel support per ADR-0013) — not when it's just docs + the substrate fix from ADR-0011.
+- **API surface coupling.** If we ship a demo migration that consumers are expected to use, the demo's broadcast leg should exercise private-channel Authorization — which requires the substrate API addition from ADR-0013 (`{ config: { private: true } }` on `BroadcastSender` / `BroadcastAdapter`). Shipping the demo before that API exists means the demo would model the public-channel topology, then immediately rewrite when private channels land. One coherent ship after ADR-0013 lands is cleaner than two partial ones — that's the load-bearing reason; the npm release headline is downstream of it, not the cause.
 
 **Recommended sequence:** ADR-0011 (bug fix) → ADR-0012 (this, docs + scope honesty) → ADR-0013 (private-channel substrate API + smoke test extension) → ADR-0014 (demo migration + npm `0.2.0` release headline).
 

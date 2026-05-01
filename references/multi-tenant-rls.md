@@ -91,7 +91,7 @@ create policy "users see own memberships"
 ```
 
 Two patterns worth calling out:
-- **`(select auth.uid())` not `auth.uid()`** — the subselect lets Postgres cache the JWT lookup once per query instead of recomputing per row. [Documented Supabase performance pattern.](https://supabase.com/docs/guides/database/postgres/row-level-security#use-security-definer-functions)
+- **`(select auth.uid())` not `auth.uid()`** — the subselect lets Postgres cache the JWT lookup once per query instead of recomputing per row. Documented on the [Supabase RLS performance page](https://supabase.com/docs/guides/database/postgres/row-level-security) under "Wrap functions in select."
 - **`SECURITY DEFINER` on `private.user_organizations`** — bypasses RLS on `memberships` *only inside the helper*, so the audit-events policy can use it without recursing through memberships' own RLS. Don't grant `EXECUTE` on this helper to client-facing roles unless you mean to.
 
 ## Channel topology under tenant isolation
@@ -142,7 +142,7 @@ await handleBroadcast(
 );
 ```
 
-The substrate doesn't enforce tenant scoping on channel names — that's the consumer's job. The eval at `eval/multi-tenant-runner.ts` measures whether consumer compositions correctly route per-tenant events to per-tenant channels (the `cross_tenant_leakage_rate_max` metric).
+The substrate doesn't enforce tenant scoping on channel names — that's the consumer's job. A composition-side eval gating consumer routing correctness (`cross_tenant_leakage_rate_max` candidate cell) is *deferred per [ADR-0012 § 2](../docs/decisions/0012-multi-tenant-audit-log-example.md)* — the substrate-side falsifiable receipt is the smoke test cited below; a fake-driven composition eval is in the ADR's roadmap, not yet shipped.
 
 ## Scale shape: where Postgres-Changes hits its ceiling
 
@@ -227,7 +227,7 @@ The smoke test [`tests/smoke/multi-tenant-rls.smoke.test.ts`](../tests/smoke/mul
 
 Then it subscribes as user A under their JWT, fires three own-tenant + two cross-tenant inserts, and asserts (a) own-tenant events arrive, (b) cross-tenant events are blocked. The receipt lives in [ADR-0011](../docs/decisions/0011-multi-tenant-rls-baseline.md).
 
-For the eval-side composition tests (consumer code keeping tenant isolation across batches, mixed-tenant events, etc.), see [`fixtures/ci-fast/multi-tenant/`](../fixtures/ci-fast/multi-tenant/) and [`eval/multi-tenant-runner.ts`](../eval/multi-tenant-runner.ts).
+A composition-side eval (consumer code keeping tenant isolation across batches, mixed-tenant events, adversarial `read_row` shapes) is named in the roadmap but not yet shipped — see [ADR-0012 § 2](../docs/decisions/0012-multi-tenant-audit-log-example.md) for the deferral rationale and [the recon](../docs/recon/2026-05-01-multi-tenant-worked-example-recon.md) § "Falsifiable predicted effect" for the proposed fixture shape.
 
 ## See also
 
