@@ -1,0 +1,26 @@
+{
+  "id": "qd002-poison-row-routes-to-dlq",
+  "description": "One row's destination permanently rejects the broadcast (e.g., dead Slack channel). Module retries 3× via handleBroadcast, then routes to dead_letter callback. Final state: 0 forwarded, 1 dead_lettered, 0 failed.",
+  "drain_config": {
+    "timeout_ms": 5000,
+    "max_events": 5,
+    "dead_letter_provided": true
+  },
+  "rows_arriving": [
+    {
+      "id": "row-poison",
+      "destination": "slack:channel-was-deleted",
+      "event_type": "deploy.started",
+      "payload": { "service": "ghost-svc" }
+    }
+  ],
+  "broadcast_behavior": {
+    "permanently_fail_destinations": ["slack:channel-was-deleted"]
+  },
+  "expected_end_state": {
+    "forwarded": 0,
+    "dead_lettered": 1,
+    "failed": 0,
+    "closed_reason_one_of": ["timeout"]
+  }
+}

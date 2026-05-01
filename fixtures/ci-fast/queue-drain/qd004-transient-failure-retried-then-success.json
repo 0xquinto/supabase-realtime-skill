@@ -1,0 +1,27 @@
+{
+  "id": "qd004-transient-failure-retried-then-success",
+  "description": "Broadcast for one row fails on attempts 1 and 2, succeeds on attempt 3. handleBroadcast's internal retry envelope absorbs the transient failure; the module never sees an error. Final state: 1 forwarded, 0 dead_lettered, 0 failed. Verifies the module composes with handleBroadcast's retry semantics (does not redundantly retry, does not escalate transient errors to DLQ).",
+  "drain_config": {
+    "timeout_ms": 10000,
+    "max_events": 1,
+    "dead_letter_provided": true
+  },
+  "rows_arriving": [
+    {
+      "id": "row-flaky",
+      "destination": "webhook:flaky-upstream",
+      "event_type": "billing.invoice_finalized",
+      "payload": { "invoice_id": "inv-123", "amount_cents": 4999 }
+    }
+  ],
+  "broadcast_behavior": {
+    "fail_first_n_attempts_for_row": "row-flaky",
+    "n": 2
+  },
+  "expected_end_state": {
+    "forwarded": 1,
+    "dead_lettered": 0,
+    "failed": 0,
+    "closed_reason_one_of": ["max_events"]
+  }
+}

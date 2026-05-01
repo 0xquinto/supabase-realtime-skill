@@ -1,0 +1,17 @@
+{
+  "id": "qd005-timeout-no-rows",
+  "description": "Zero rows arrive within the drain window. boundedWatch closes on timeout; no broadcasts attempted; no acks called. Final state: all counters zero, closed_reason=timeout. Verifies the bounded-pass primitive degrades cleanly to a no-op when the queue is idle.",
+  "drain_config": {
+    "timeout_ms": 1000,
+    "max_events": 10,
+    "dead_letter_provided": true
+  },
+  "rows_arriving": [],
+  "broadcast_behavior": "always_success",
+  "expected_end_state": {
+    "forwarded": 0,
+    "dead_lettered": 0,
+    "failed": 0,
+    "closed_reason_one_of": ["timeout"]
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "id": "qd001-clean-drain-3-rows",
+  "description": "Three rows arrive, all broadcasts succeed, all rows are acked. Closed_reason is max_events (max_events=3 trips before timeout).",
+  "drain_config": {
+    "timeout_ms": 5000,
+    "max_events": 3,
+    "dead_letter_provided": true
+  },
+  "rows_arriving": [
+    {
+      "id": "row-1",
+      "destination": "slack:eng-deploys",
+      "event_type": "deploy.started",
+      "payload": { "service": "api", "sha": "abc123" }
+    },
+    {
+      "id": "row-2",
+      "destination": "slack:eng-deploys",
+      "event_type": "deploy.completed",
+      "payload": { "service": "api", "duration_ms": 8421 }
+    },
+    {
+      "id": "row-3",
+      "destination": "webhook:audit-sink",
+      "event_type": "user.role_changed",
+      "payload": { "user_id": "u-7", "from": "viewer", "to": "editor" }
+    }
+  ],
+  "broadcast_behavior": "always_success",
+  "expected_end_state": {
+    "forwarded": 3,
+    "dead_lettered": 0,
+    "failed": 0,
+    "closed_reason_one_of": ["max_events"]
+  }
+}
