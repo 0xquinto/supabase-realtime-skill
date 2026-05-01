@@ -1,6 +1,6 @@
 {
   "name": "supabase-realtime-skill",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Agent Skill + MCP server for Supabase Realtime/CDC. Bounded subscription pattern fits Edge Function isolate budgets.",
   "license": "Apache-2.0",
   "author": "Diego Gomez <diego.gomez210@gmail.com>",
