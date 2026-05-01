@@ -110,7 +110,8 @@ End-to-end walkthrough with code in `references/worked-example.md`.
 
 - [`predicates.md`](references/predicates.md) — supported filter ops, why others are excluded
 - [`replication-identity.md`](references/replication-identity.md) — when to enable `REPLICA IDENTITY FULL`
-- [`rls-implications.md`](references/rls-implications.md) — RLS + Realtime + broadcast auth
+- [`rls-implications.md`](references/rls-implications.md) — RLS + Realtime + broadcast auth (high-level summary)
+- [`multi-tenant-rls.md`](references/multi-tenant-rls.md) — multi-tenant deep dive: two RLS layers, `setAuth` requirement, production schema shape, scaling story
 - [`presence-deferred.md`](references/presence-deferred.md) — design questions left open for v2
 - [`pgvector-composition.md`](references/pgvector-composition.md) — composing CDC + Automatic Embeddings + retrieval
 - [`eval-methodology.md`](references/eval-methodology.md) — the 4 metrics, why not LLM-judge
