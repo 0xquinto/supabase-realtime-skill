@@ -17,12 +17,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v1
-      # Node ≥ 22.14 + npm ≥ 11.5.1 are required for OIDC trusted publishing.
+      # OIDC trusted publishing needs npm ≥ 11.5.1. Node 24 ships npm 11 by
+      # default, so we don't have to self-upgrade npm (which is fragile —
+      # `npm install -g npm@latest` against the bundled 10.x in node 22 hits
+      # a known MODULE_NOT_FOUND in arborist's promise-retry resolution).
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           registry-url: https://registry.npmjs.org
-      - run: npm install -g npm@latest
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun run test:fast
