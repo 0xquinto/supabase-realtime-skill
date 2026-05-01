@@ -60,38 +60,31 @@ bun run eval/runner.ts ci-nightly
 
 The 4-metric report fills in the `_pending_` cells in `docs/writeup.md` § 4. `latency_to_first_event_ms` p95 already has a credible value (438ms from T9 spike); the other three (missed_events_rate, spurious_trigger_rate, agent_action_correctness) need the worked-example run.
 
-### 3. Edge Function MCP transport rewire (T8 secondary concern)
+### 3. ~~Edge Function MCP transport rewire~~ — done (v0.1.x)
 
-`supabase/functions/mcp/index.ts` deploys cleanly and serves GET-200, but the request path returns a placeholder body. Tool-call routing isn't wired. The `makeServer` factory is constructed in the entry to exercise the import graph but immediately discarded. To make live MCP calls work end-to-end, the entry needs to:
+Live JSON-RPC `tools/list` against `https://<host_ref>.supabase.co/functions/v1/mcp` returns all 5 tools. Per-request stateless `WebStandardStreamableHTTPServerTransport`. Transcript in `docs/writeup.md` § 4.
 
-- Wire `StreamableHTTPServerTransport` (the SDK v1.29 successor to deprecated `SSEServerTransport`)
-- Route POST requests through that transport to the `Server` instance
-- Forward `Authorization: Bearer <agent-jwt>` into the per-call config
+### 4. npm publish — partially done
 
-Estimated scope: 30-50 lines in the Edge Function entry, no changes to `src/`. The 5 tools, schemas, error handling, and adapter wiring are all already in place.
+Repo is public at github.com/0xquinto/supabase-realtime-skill, `v0.1.0` tag pushed, ci-fast green. The `publish.yml` workflow ran but failed at the `npm publish` step:
 
-### 4. npm publish (T30 Steps 2-4)
+```
+npm error code ENEEDAUTH
+npm error need auth You need to authorize this machine using `npm adduser`
+```
 
-Build is verified locally; not published. To publish:
+**Fix:** the `NPM_TOKEN` repo secret isn't set on the GitHub repo. Once added (Settings → Secrets → Actions → `NPM_TOKEN`), re-trigger via:
 
-1. Push the local commits to a GitHub remote (no remote currently configured).
-2. Create the `v0.1.0` tag and push it:
-   ```bash
-   git tag v0.1.0
-   git push --tags
-   ```
-   The `publish.yml` workflow runs typecheck + tests + build + `npm publish --provenance --access public`. Requires the `NPM_TOKEN` repo secret.
-3. After publish, swap the Edge Function entry's import to `npm:supabase-realtime-skill@0.1.0/server` (T30 Step 2).
-4. Sanity-check via fresh consumer (T30 Step 4):
-   ```bash
-   mkdir /tmp/skill-consumer && cd /tmp/skill-consumer
-   bun init -y
-   bun add supabase-realtime-skill
-   ```
+```bash
+git tag -d v0.1.0 && git push origin :refs/tags/v0.1.0
+git tag v0.1.0 && git push --tags
+```
+
+Or skip npm for now and consume the package directly from GitHub (`bun add github:0xquinto/supabase-realtime-skill#v0.1.0`).
 
 ### 5. Upstream issue on `supabase/agent-skills` (T31)
 
-Plan T31 has the full issue body draft. Filing is the operator's call — the build needs to be on a public GitHub remote first (otherwise the URLs in the issue body 404).
+Plan T31 has the full issue body draft. Repo is now public, so URLs resolve. Filing is the operator's call.
 
 ## Known gaps for v0.2
 

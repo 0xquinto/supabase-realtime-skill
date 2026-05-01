@@ -102,7 +102,29 @@ What these numbers *don't* tell you, per Bean's construct-validity checklist (ci
 - **Server-side WebSocket auth** — depends on JWT issuance pattern beyond v1's "agent has a JWT, function is a pass-through" assumption. v2 territory.
 - **Custom-channel-broker patterns** — overlaps Broadcast; differentiation story isn't clear yet. Held back deliberately.
 - **LLM-judge integration** — anti-pattern per playbook discipline. Advisory only, never as a gate.
-- **MCP tool-call routing in the Edge Function entry** — the function is currently deployed and reachable (`curl GET` returns 200, full import graph loads at startup) but the request path returns a placeholder body instead of running an MCP `Server` over `StreamableHTTPServerTransport`. The transport rewire is a small, contained follow-up — see `docs/spike-findings.md` (T8 secondary concern). The handler functions, schemas, and tool registrations are all in place; only the HTTP-to-MCP transport plumbing remains.
+- ~~**MCP tool-call routing in the Edge Function entry**~~ — **shipped in v0.1.x.** The function deploys cleanly and a JSON-RPC `tools/list` round-trip against the live URL returns all five tools (transcript below). Per-request stateless `WebStandardStreamableHTTPServerTransport` over a fresh `Server` per invocation, matching the Edge Function 150s isolate budget.
+
+### Live-deploy verification (recorded 2026-04-30)
+
+`supabase functions deploy mcp` then a JSON-RPC `tools/list` against the deployed URL:
+
+```
+$ curl -sS -X POST "https://<host_ref>.supabase.co/functions/v1/mcp" \
+    -H "Authorization: Bearer <anon_key>" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+
+{"jsonrpc":"2.0","id":1,"result":{"tools":[
+  {"name":"watch_table","description":"Bounded subscription to Postgres row-changes...","inputSchema":{...}},
+  {"name":"broadcast_to_channel","description":"Fire-and-forget broadcast on a Realtime channel...","inputSchema":{...}},
+  {"name":"subscribe_to_channel","description":"Bounded subscription to a Realtime broadcast channel...","inputSchema":{...}},
+  {"name":"list_channels","description":"Best-effort listing of channels known to the server registry.","inputSchema":{...}},
+  {"name":"describe_table_changes","description":"Introspects a table's columns, primary key, RLS state, and REPLICA IDENTITY.","inputSchema":{...}}
+]}}
+```
+
+All five tools enumerate with their input schemas. The transport plumbing is real; the artifact deploys.
 
 The shape of the artifact is deliberately small. Five tools, two primitives, one worked example, four metrics. The bet is that **depth in a focused niche** outweighs **breadth across a broader surface** — particularly when the broader surface (the official `supabase` Agent Skill) already exists.
 
@@ -121,8 +143,7 @@ Both findings are *operational discipline shipped with the artifact* — agents 
 - f017 cluster (5/100 misroutes): the remaining systematic gap after the v0.1.2 relabel. **Negative result:** tried prompt-tightening with explicit category definitions; accuracy unchanged, p95 latency rose to 2088ms (over budget). Plausible v0.2 paths: richer resolved corpus with technically-flavored `general` examples that bias retrieval correctly, or model swap from haiku-4-5 to a stronger router. ADR-0002 documents why f017 is genuinely `general` despite the technical surface.
 - Bump ci-nightly to n=300 — makes Wilson CI lower bound on action_correctness reachable (~0.860 at p̂=0.90) and tightens CI upper on missed/spurious to ~0.012. v2.0.0 manifest amendment with rationale; pre-registered v1.0.0 stays as-is per ADR-0001.
 - Ship `.d.ts` types — current `bun build` doesn't emit declarations, so npm consumers get `any`. Switch to `tsup` (or add a `tsc -d --emitDeclarationOnly` pass).
-- Live-deploy verification: `supabase functions deploy mcp` + curl JSON-RPC `tools/list` against the deployed function, paste transcript into this writeup.
-- Open issue on [`supabase/agent-skills`](https://github.com/supabase/agent-skills/issues) proposing this as a `realtime` sub-skill (after the public push so URLs resolve).
+- Open issue on [`supabase/agent-skills`](https://github.com/supabase/agent-skills/issues) proposing this as a `realtime` sub-skill.
 - v2 design pass on Presence semantics for agents.
 - Exploration of custom-channel-broker patterns once Broadcast usage is well-established.
 
