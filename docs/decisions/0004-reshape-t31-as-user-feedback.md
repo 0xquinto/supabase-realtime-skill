@@ -1,8 +1,9 @@
 # ADR 0004: reshape T31 as `[User Feedback]` issue, not sub-skill proposal
 
 **Date:** 2026-05-01
-**Status:** Accepted
-**Decider:** Diego Gomez
+**Status:** Proposed (recommendation pending operator decision; not yet accepted)
+**Recommender:** Claude Opus 4.7 (assistant)
+**Decider:** Diego Gomez (TBD)
 **Context:** Plan task T31 (in `docs/upstream/plan/2026-04-30-supabase-realtime-skill-build.md` § Task 31) drafts a proposal-shaped issue for `supabase/agent-skills` framing this artifact as a candidate `realtime` sub-skill. Pre-file recon (see `docs/upstream/recon/2026-05-01-pre-t31-engagement-recon.md`) revealed the maintainer's stated direction is **monolith + references**, not federation. Filing as drafted would ask the maintainer to violate his own published policy and almost certainly get the same closed-without-merge or unanswered treatment as PRs #26, #47, #48, #51, #45, #52, #68, #59.
 
 ## The conflict between original T31 and observed reality
@@ -17,9 +18,9 @@ So T31's original framing fights the observed direction. Spec § 13 success crit
 
 A "thanks but closed — see our policy in PR #26" response is technically SC#4-satisfying *and* JD-net-negative. We avoid that asymmetry.
 
-## Decision
+## Recommendation (not yet a decision)
 
-Reshape T31 as a [User Feedback] issue using the repo's actual [`user-feedback.md` template](https://github.com/supabase/agent-skills/blob/main/.github/ISSUE_TEMPLATE/user-feedback.md). The issue:
+Reshape T31 as a [User Feedback] issue using the repo's actual [`user-feedback.md` template](https://github.com/supabase/agent-skills/blob/main/.github/ISSUE_TEMPLATE/user-feedback.md). The issue would:
 
 1. Cites concrete corrections the existing `supabase` SKILL.md body needs in its Realtime trigger surface (the ~5s warm-up window after `subscribe()`; the `replica identity full` requirement for UPDATE event payloads; the bounded-subscription budget that fits Edge Function 150s isolate caps).
 2. Cites this artifact's spike findings + worked example as evidence (`docs/spike-findings.md` § T7; `references/replication-identity.md`; `references/edge-deployment.md`).
@@ -28,7 +29,17 @@ Reshape T31 as a [User Feedback] issue using the repo's actual [`user-feedback.m
 
 This **respects their stated process**, **leverages our concrete evidence** (the warm-up window is falsifiable in 90 seconds against a fresh branch), and **gets the artifact in front of gregnr without setting up a no**.
 
-## Reshaped issue body (draft)
+## Decision options still on the table
+
+This ADR is filed in **Proposed** state because the operator has not yet committed. The three live options remain:
+
+- **(A) File T31 as originally drafted** (sub-skill proposal). Recon § 6 estimates ~25% confidence this lands well.
+- **(B) Adopt this ADR** (reshape as user-feedback). Recon § 6 estimates ~60% confidence.
+- **(C) Don't file at all.** The standalone artifact (npm + Edge deploy + writeup + ADRs + eval discipline) is the deliverable; T31 is optional. Recon § 6 estimates ~40% confidence on the time-tradeoff being worth a different action (e.g., LinkedIn / blog post tagging gregnr organically).
+
+Promote this ADR to **Accepted** if option (B) is chosen, **Rejected** if (A) or (C) is chosen.
+
+## Reshaped issue body (draft, contingent on accepting this ADR)
 
 ```markdown
 **Title:** [User Feedback] Realtime trigger surface in `supabase` skill — three operational gaps
