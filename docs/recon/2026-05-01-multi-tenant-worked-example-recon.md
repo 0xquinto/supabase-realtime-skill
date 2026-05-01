@@ -26,6 +26,8 @@ Two questions this recon has to answer before any drafting starts:
 
 **The gap:** for `@supabase/supabase-js` Realtime, the websocket handshake uses `client.realtime.setAuth(token)` to set the JWT used in RLS policy evaluation, NOT the `global.headers.Authorization` value. The current code may therefore evaluate RLS against the *anon* claims_role on the websocket leg, even though PostgREST calls would use the user's JWT. Quoting Supabase's [Realtime Authorization docs](https://supabase.com/docs/guides/realtime/authorization): *"To use your own JWT with Realtime make sure to set the token after instantiating the Supabase client and before connecting to a Channel."*
 
+**Source-level confirmation** (verified against installed `@supabase/supabase-js`): `SupabaseClient.ts:307-340` wires `realtime.accessToken = this._getAccessToken.bind(this)` when no caller-supplied `accessToken` callback is passed. `_getAccessToken` (`SupabaseClient.ts:534-541`) calls `this.auth.getSession()` and returns `data.session?.access_token ?? this.supabaseKey`. In the Edge Function context — no persisted session, no `signInWith*` call — `auth.getSession()` resolves to no session, so `_getAccessToken` falls back to `this.supabaseKey` (the **anon key**) for the websocket. `realtime.setAuth(token)` is the documented override; it sets `accessTokenValue` on the underlying `RealtimeClient` (`RealtimeClient.ts:475`), short-circuiting the fallback. So the precise diagnosis is "websocket uses `supabaseKey` because the default `_getAccessToken` falls back," not "no JWT plumbing at all" — load-bearing for what the smoke test asserts.
+
 **Why this hasn't surfaced:** all smoke tests use `serviceRole` (bypasses RLS); fast tests use mocked adapters (no real Realtime). The first multi-tenant smoke test with two real JWTs would either confirm the gap or rule it out. **This is the highest-leverage thing the worked example would catch.**
 
 ### Schema has no tenant-isolation precedent yet
@@ -131,7 +133,7 @@ In rough order of how much they affect the rest:
    - **(ii)** Two branches. Heavier, no point — RLS is enforced at the row level, not the database level.
    - Recommend **(i)**.
 
-6. **Manifest extension.** New cell `tenant_isolation_rate_min` (or rename to `cross_tenant_leakage_rate_max` for symmetry with `missed_events_rate_max`). Pre-stage in ADR-0007 v2.0.0 design at the same time as `forward_correctness_rate_min`. Tightly: 0/N leakage at any tier, since a single leak is a critical bug — don't reach for "Wilson upper at 0.005" defaults.
+6. **Manifest extension.** New cell `tenant_isolation_rate_min` (or rename to `cross_tenant_leakage_rate_max` for symmetry with `missed_events_rate_max`). Pre-stage in ADR-0007 v2.0.0 design at the same time as `forward_correctness_rate_min`. Gating tightness is deferred to the ADR — see open question 3 below. The argument for "0/N at any tier, no Wilson cushion" is that any leak is a critical bug; the argument against is ADR-0001's "FAIL-by-design at small n" precedent (Wilson upper at p̂=0, n=20 ≈ 0.16 — not a real gate at the ci-fast tier). Both arguments are strong; ADR-0011 should commit, this recon shouldn't.
 
 ## Falsifiable predicted effect (draft)
 
@@ -164,9 +166,9 @@ Plausible candidate metric names for the v2.0.0 manifest:
 
 **Recommended ADR pre-loads:**
 
-- Land the JWT-`setAuth` fix in `makeSupabaseAdapter` and `makeBroadcastSender` as a precondition — it's a small change that the multi-tenant worked example then verifies.
+- **Sequence the smoke test BEFORE the `setAuth` fix.** Falsifiable shape: write the two-tenant smoke test against current code first (expects FAIL — anon-claims-role evaluation lets cross-tenant events leak); then land `setAuth` in `makeSupabaseAdapter` + `makeBroadcastSender`; then re-run (expects PASS). This produces a baseline-before-gate trail that mirrors ADR-0010's n=7 baseline pattern. Skipping the FAIL run means the gap goes unverified; the fix is then a faith-based change, not an evidence-based one.
 - Ship the multi-tenant audit-log worked example (option (a) above), with junction-table tenancy (option 2.b above), demonstrating both Postgres-Changes RLS *and* Broadcast Authorization RLS.
-- Add a smoke test that provisions one branch with two real tenants + two real JWTs and asserts zero cross-tenant leakage on both legs.
+- **Sketch the multi-tenant fixture schema in ADR-0011's body** before the manifest cell name lands. Tuple shape `(tenant_id, user_id, JWT, expected_visibility)` per fixture, with at minimum the five scenarios named in § "Falsifiable predicted effect" (same-table baseline, same-table cross-tenant, broadcast same-tenant, broadcast cross-tenant, nested membership). Mirror how ADR-0010 sketched `qd*.json` shape inline. Without this, the manifest cell name precedes the fixture infra and the gate is un-runnable.
 - Pre-stage `cross_tenant_leakage_rate_max` in ADR-0007's v2.0.0 manifest design alongside `forward_correctness_rate_min` — same templated-amendment shape.
 - File `references/multi-tenant-rls.md` covering the two RLS layers, the JWT-`setAuth` requirement, the connection-pool-contamination non-issue, the Postgres-Changes scale ceiling (and where the bounded primitive fits in the recommended re-stream pattern).
 - Frame the ADR as "closing the substrate-claim gap on RLS" — not as "a new feature." The artifact already claims JWT forwarding; this work *verifies* it.
@@ -177,8 +179,9 @@ These are recommendations, not decisions — the ADR will be filed as **Proposed
 
 - Whether the JWT-`setAuth` fix needs a backward-compatibility path (probably not — current behavior is broken when authToken is set, just silently degrades to anon claims_role).
 - Whether to address the echo-prevention pattern (SalesSheet.ai writeup) inside this worked example or defer to a separate ADR.
-- Whether `cross_tenant_leakage_rate_max` should gate at n=20 (ci-fast) or only at n=100 (ci-full). Tight gate at small-n is mechanically meaningful here because *any* leak = FAIL, unlike `action_correctness` where small-n CI bounds are unreachable.
+- Whether `cross_tenant_leakage_rate_max` should gate at n=20 (ci-fast) or only at n=100 (ci-full). Tight gate at small-n is mechanically meaningful here because *any* leak = FAIL, unlike `action_correctness` where small-n CI bounds are unreachable. Cross-references decision (6) above — the recon doesn't pick.
 - Whether the worked example should cover Presence too, or stick to Postgres-Changes + Broadcast. (Recommend stick — Presence in the JD-pivot context was already deferred per the v0.1.x "judgment about what to defer" framing.)
+- **What's the contract when an MCP request arrives with no `Authorization` header?** Today `realtime-client.ts:90-91` makes the header conditional (`if (cfg.authToken)`); after the `setAuth` fix, the same conditional applies. RLS-required tables would then return zero rows under anon claims — silent-empty failure. ADR should commit on whether `makeSupabaseAdapter` errors loudly when `authToken` is missing on an RLS-required table (caller's responsibility to opt out for public-read shapes), or whether silent-empty is acceptable as the operator's-job framing. Tianpan's "permission preservation" framing (cited above) makes this a real design choice, not a corner case.
 
 ## References
 
