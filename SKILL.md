@@ -82,4 +82,5 @@ End-to-end walkthrough with code in `references/worked-example.md`.
 - [`pgvector-composition.md`](references/pgvector-composition.md) — composing CDC + Automatic Embeddings + retrieval
 - [`eval-methodology.md`](references/eval-methodology.md) — the 4 metrics, why not LLM-judge
 - [`edge-deployment.md`](references/edge-deployment.md) — operator setup
-- [`worked-example.md`](references/worked-example.md) — support-ticket triage end-to-end
+- [`worked-example.md`](references/worked-example.md) — support-ticket triage end-to-end (LLM + pgvector)
+- [`outbox-forwarder.md`](references/outbox-forwarder.md) — non-LLM worked example (substrate generalizes beyond AI use cases)

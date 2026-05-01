@@ -73,14 +73,14 @@ See [`references/edge-deployment.md`](references/edge-deployment.md) for full op
 
 All five over `WebStandardStreamableHTTPServerTransport` (MCP SDK 1.29+), per-request stateless. Five tools, intentionally tight — see [`SKILL.md`](SKILL.md) for what *not* to use them for.
 
-## Eval results (latest ci-nightly, n=100)
+## Eval results (latest ci-nightly, n=100, post-ADR-0006)
 
 | Metric | Result | Threshold (manifest v1.0.0) | Status |
 |---|---|---|---|
-| `latency_to_first_event_ms` p95 | **1758 ms** | ≤ 2000 ms | ✅ PASS |
+| `latency_to_first_event_ms` p95 | **1300 ms** | ≤ 2000 ms | ✅ PASS |
 | `missed_events_rate` | **0/100** (Wilson upper 0.0370) | rate ≤ 0.005, CI upper ≤ 0.01 | rate PASS, CI mechanically unreachable at n=100 — see ADR-0001 |
 | `spurious_trigger_rate` | **0/100** (Wilson upper 0.0370) | rate ≤ 0.01, CI upper ≤ 0.03 | rate PASS, CI same as above |
-| `agent_action_correctness` | **94/100, CI low 0.875** | rate ≥ 0.90, CI low ≥ 0.85 | ✅ PASS rate AND CI low |
+| `agent_action_correctness` | **96/100, CI low 0.902** | rate ≥ 0.90, CI low ≥ 0.85 | ✅ PASS rate AND CI low |
 
 Pre-registered in [`manifest.json`](manifest.json) at v1.0.0; gated via [`eval/runner.ts`](eval/runner.ts); v2.0.0 amendment to bump n→300 deferred per [ADR-0001](docs/decisions/0001-manifest-v1-stays-uncalibrated.md).
 
@@ -100,7 +100,7 @@ Operational findings from the spike — 5s warm-up window, Deno bundler `.ts` ex
 ## Layout
 
 - [`SKILL.md`](SKILL.md) — Open Skills Standard entry; three triggers + tools at a glance
-- [`references/`](references/) — 8 opinionated patterns (predicates, RLS, replication identity, pgvector composition, eval methodology, edge deployment, presence-deferred, worked example)
+- [`references/`](references/) — 9 opinionated patterns (predicates, RLS, replication identity, pgvector composition, eval methodology, edge deployment, presence-deferred, worked example, outbox forwarder)
 - [`src/server/`](src/server/) — MCP server (5 tools) + bounded primitives + production adapters
 - [`src/client/`](src/client/) — npm consumer barrel (boundedWatch + schemas + types)
 - [`supabase/functions/mcp/`](supabase/functions/mcp/) — Edge Function entry (`WebStandardStreamableHTTPServerTransport`)
