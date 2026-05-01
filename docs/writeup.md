@@ -116,7 +116,7 @@ Both findings are *operational discipline shipped with the artifact* — agents 
 
 ## Next steps
 
-- Investigate the f017 (feature-request) and f019 (SSO) `general` clusters — the remaining 10/100 misroutes after pgvector. Either tighten the triage prompt's "general" definition (default to `general` for non-incident, non-billing, non-blocking-engineering questions) or relabel f017/f019 to `engineering` and add new genuinely-`general` seeds.
+- Investigate the f017 (feature-request) and f019 (SSO) `general` clusters — the remaining 10/100 misroutes after pgvector. **Negative result:** tried tightening the triage prompt with explicit category definitions (commit reverted, not in tree); accuracy stayed flat at 18/20 on ci-fast and the longer prompt pushed p95 latency to 2088ms (over the 2000ms budget). Cost-benefit is net negative. Plausible v0.2 paths instead: relabel f019 to `engineering` (the seed label is genuinely arguable — two coworkers blocked from logging in is more service-bug than account-admin) and add 5 new genuinely-`general` seeds; or swap haiku-4-5 for a stronger router model on a per-trial basis.
 - Bump ci-nightly to n=300 — makes Wilson CI lower bound on action_correctness reachable (~0.860 at p̂=0.90) and tightens CI upper on missed/spurious to ~0.012. v2.0.0 manifest amendment with rationale; pre-registered v1.0.0 stays as-is per ADR-0001.
 - Ship `.d.ts` types — current `bun build` doesn't emit declarations, so npm consumers get `any`. Switch to `tsup` (or add a `tsc -d --emitDeclarationOnly` pass).
 - Live-deploy verification: `supabase functions deploy mcp` + curl JSON-RPC `tools/list` against the deployed function, paste transcript into this writeup.
