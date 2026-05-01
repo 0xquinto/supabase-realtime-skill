@@ -102,14 +102,24 @@ See [`references/edge-deployment.md`](references/edge-deployment.md) for full op
 
 All five over `WebStandardStreamableHTTPServerTransport` (MCP SDK 1.29+), per-request stateless. Five tools, intentionally tight — see [`SKILL.md`](SKILL.md) for what *not* to use them for.
 
-## Eval results (latest ci-nightly, n=100, post-ADR-0006)
+## Eval results (latest ci-nightly, n=100, post-ADR-0009 with Sonnet 4.6)
 
 | Metric | Result | Threshold (manifest v1.0.0) | Status |
 |---|---|---|---|
-| `latency_to_first_event_ms` p95 | **1300 ms** | ≤ 2000 ms | ✅ PASS |
+| `latency_to_first_event_ms` p95 | **1281 ms** | ≤ 2000 ms | ✅ PASS |
 | `missed_events_rate` | **0/100** (Wilson upper 0.0370) | rate ≤ 0.005, CI upper ≤ 0.01 | rate PASS, CI mechanically unreachable at n=100 — see ADR-0001 |
 | `spurious_trigger_rate` | **0/100** (Wilson upper 0.0370) | rate ≤ 0.01, CI upper ≤ 0.03 | rate PASS, CI same as above |
-| `agent_action_correctness` | **96/100, CI low 0.902** | rate ≥ 0.90, CI low ≥ 0.85 | ✅ PASS rate AND CI low |
+| `agent_action_correctness` | **99/100, CI low 0.946** | rate ≥ 0.90, CI low ≥ 0.85 | ✅ PASS rate AND CI low |
+
+Calibration sequence (each step in its own ADR; honest, attributable, isolable):
+
+| Run | Model | Intervention | Rate | CI low |
+|---|---|---|---|---|
+| v0.1.0 baseline | Haiku 4.5 | recency proxy "retrieval" | 87/100 | 0.79 |
+| v0.1.1 | Haiku 4.5 | real pgvector wiring | 90/100 | 0.83 |
+| v0.1.2 (post-ADR-0002) | Haiku 4.5 | f019 ground-truth relabel | 94/100 | 0.875 |
+| v0.1.3 (post-ADR-0006) | Haiku 4.5 | resolved-corpus enrichment | 96/100 | 0.902 |
+| **v0.1.4 (post-ADR-0009)** | **Sonnet 4.6** | model swap | **99/100** | **0.946** |
 
 Pre-registered in [`manifest.json`](manifest.json) at v1.0.0; gated via [`eval/runner.ts`](eval/runner.ts); v2.0.0 amendment to bump n→300 deferred per [ADR-0001](docs/decisions/0001-manifest-v1-stays-uncalibrated.md).
 
