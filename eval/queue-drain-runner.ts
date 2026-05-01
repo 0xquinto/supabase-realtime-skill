@@ -279,9 +279,9 @@ async function main(): Promise<void> {
   const outcomes: FixtureOutcome[] = [];
   for (const fixture of fixtures) {
     const o = await runFixture(fixture);
+    const reasonStr = o.reason ? ` reason=${o.reason}` : "";
     console.log(
-      `[trial ${o.fixture_id}] ${o.pass ? "PASS" : "FAIL"} duration=${o.duration_ms}ms` +
-        (o.reason ? ` reason=${o.reason}` : ""),
+      `[trial ${o.fixture_id}] ${o.pass ? "PASS" : "FAIL"} duration=${o.duration_ms}ms${reasonStr}`,
     );
     outcomes.push(o);
   }

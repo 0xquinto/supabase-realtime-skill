@@ -3,7 +3,7 @@
 **Date:** 2026-05-01
 **Status:** Proposed (design locked; ships when the n=300 fixture corpus lands)
 **Decider:** Diego Gomez
-**Amendments:** [ADR-0010](0010-bounded-queue-drain.md) proposes adding `forward_correctness_rate_min` + `forward_correctness_ci_low_min` cells to this manifest (also Proposed — would land atomically with the v0.2.0 npm release).
+**Amendments:** [ADR-0010](0010-bounded-queue-drain.md) proposes adding `forward_correctness_rate_min` + `forward_correctness_ci_low_min` cells to this manifest (Proposed → ready for Accepted promotion as of 2026-05-01; implementation + reference page + n=7 fake-driven baseline all shipped). The two new cells stay pre-staged in this design until the n=300 fixture corpus + ci-nightly run land — same atomic-ship discipline this ADR's § "What this ADR doesn't do" specifies.
 **Note on versioning:** "v2.0.0" throughout this ADR refers to **`manifest.json` v2.0.0** (the eval-thresholds file), not npm package v2.0.0. The two streams are independently versioned — see [ADR-0001](0001-manifest-v1-stays-uncalibrated.md) for why. Current state: `manifest.json` v1.0.0 ships with npm v0.1.1.
 **Context:** ADR-0001 deferred Wilson CI calibration to a `manifest.json` v2.0.0 with rationale: at n=100, the CI upper bounds for `missed_events` and `spurious_trigger` (0.01 and 0.03 respectively) are mathematically unreachable even with a perfectly clean substrate (rate = 0/100 yields Wilson upper ≈ 0.0370 at 95% confidence). The two CI cells stay in FAIL state in v0.1.x by deliberate design — pre-registration discipline holds.
 
@@ -79,6 +79,8 @@ Pre-staged file (not yet committed as `manifest.json` — will replace v1.0.0 at
 | `spurious_trigger_ci_high_max` | 0.03 → 0.015 | Tightened. Same Wilson-upper math as missed_events. |
 | `action_correctness_rate_min` | 0.90 → 0.92 | Tightened. ADR-0006 (if accepted) brings v0.1.x to ~0.97; v2.0.0 ships with 0.92 as the new floor. If ADR-0006 is rejected, this stays at 0.90 in v2.0.0. **This cell is conditional on ADR-0006 outcome.** |
 | `action_correctness_ci_low_min` | 0.85 → 0.88 | Tightened. Wilson lower at n=300, p̂=0.94 is ~0.905; at p̂=0.92 is ~0.883. Setting floor to 0.88 keeps a small cushion. If ADR-0006 is rejected, this stays at 0.85 in v2.0.0. |
+| `forward_correctness_rate_min` | (new — ADR-0010) | 0.95 *(tentative; baseline 1.0 at n=7)* | New cell from ADR-0010. The boundedQueueDrain composition + handler retry envelope should leave at most ~5% of fixtures in incorrect end-state under realistic poison-row injection. Tighter than `action_correctness` because the work is mechanical (no LLM-judgment-call surface). Baseline run 2026-05-01 against the n=7 seed corpus produced 7/7 PASS; threshold locks when n=100/n=300 lands. |
+| `forward_correctness_ci_low_min` | (new — ADR-0010) | 0.92 *(advisory at ci-fast n=7; gate at ci-nightly n≥100)* | New cell from ADR-0010. Wilson lower at n=300, p̂=0.95 ≈ 0.918; floor 0.92 keeps a small cushion at full corpus size. Mechanically below 0.92 at n=7 (Wilson lower at p̂=1.0, n=7 is ~0.65) — same "FAIL by deliberate design at small-n" pattern ADR-0001 set. Becomes a real gate at the ci-nightly tier. |
 
 ### What this ADR commits to
 
