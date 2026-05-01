@@ -185,7 +185,3 @@ The pre-T31 recon (whether to file the upstream issue) lives in [`docs/upstream/
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
-
----
-
-**Related work in this portfolio:** [`supabase-mcp-evals`](https://github.com/0xquinto/supabase-mcp-evals) — the methodology research repo whose `playbook/` is the methodology backbone for this artifact's eval discipline. The two repos share the playbook + foundation slices but ship independent artifacts.
