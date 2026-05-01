@@ -14,6 +14,33 @@ Why this and not the obvious "open a WebSocket and stream":
 - **It fits Edge Function isolate budgets.** Supabase Pro caps Edge Function wall-clock at 150s. Our `timeout_ms` cap is 120s — 30s margin for setup, RPC overhead, and any post-event processing.
 - **Stateless deployment is cheap and reliable.** Each tool-call is a single isolate invocation. No long-lived workers, no state to drift, no reconnect dance after a deploy. The agent's tool-call boundary *is* the natural checkpoint.
 
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Agent
+  participant MCP as MCP Tool<br/>(watch_table)
+  participant Realtime as Supabase Realtime
+  participant PG as Postgres
+
+  Agent->>MCP: call watch_table<br/>{table, predicate, timeout_ms, max_events}
+  MCP->>Realtime: subscribe(topic)
+  Realtime-->>MCP: SUBSCRIBED ack
+  Note over MCP,Realtime: bounded loop:<br/>collect events that match predicate<br/>until max_events OR timeout
+  PG->>Realtime: row INSERT/UPDATE/DELETE
+  Realtime-->>MCP: postgres_changes event
+  PG->>Realtime: ...more events...
+  Realtime-->>MCP: postgres_changes event
+  alt max_events reached
+    MCP-->>MCP: closed_reason = "max_events"
+  else timeout_ms elapsed
+    MCP-->>MCP: closed_reason = "timeout"
+  end
+  MCP->>Realtime: unsubscribe (always — finally)
+  MCP-->>Agent: { events[], closed_reason }
+  Agent->>Agent: process batch, decide next call
+  Note over Agent: loop: call again, or stop
+```
+
 The Skill+MCP paired form factor matters here. The Skill (`SKILL.md` + `references/`) carries the *when and why* — when an agent should reach for these tools, what the bounded shape implies, what RLS interactions to expect. The MCP server carries the *how*. Either alone is incomplete: a skill without execution is documentation; an MCP server without instructions is a footgun. The April 14 2026 MCP working group office hours flagged Skill+MCP co-shipping as an open design question — this artifact is one worked answer.
 
 ## 2. Worked example: support-ticket triage
@@ -40,6 +67,42 @@ for (const ev of events) {
 ```
 
 Three of the five tools (`watch_table`, `broadcast_to_channel`, `describe_table_changes` for setup), pgvector retrieval, Automatic Embeddings as the embedding substrate. Full code in `references/worked-example.md`.
+
+```mermaid
+flowchart LR
+  subgraph DB[Postgres + pgvector + Automatic Embeddings]
+    T[(support_tickets<br/>halfvec 1536)]
+    R[(resolved corpus<br/>top-K source)]
+  end
+  subgraph Agent[Triage agent loop]
+    W[watch_table<br/>UPDATE on embedding]
+    Q[pgvector<br/>cosine top-K]
+    L[LLM<br/>routing decision]
+    U[update routing]
+    B[broadcast_to_channel<br/>agent:triage:routing]
+  end
+  Downstream[Downstream<br/>handoff agent]
+
+  T -- INSERT new ticket --> AE[Automatic Embeddings:<br/>pgmq + cron + Edge Function]
+  AE -- UPDATE row.embedding --> T
+  T -- realtime event --> W
+  W --> Q
+  R --> Q
+  Q --> L
+  L --> U
+  U -. write routing back .-> T
+  L --> B
+  B -- subscribe_to_channel --> Downstream
+
+  classDef db fill:#1e3a5f,stroke:#3b82f6,color:#fff
+  classDef agent fill:#1f2937,stroke:#10b981,color:#fff
+  classDef ext fill:#3f1f47,stroke:#a855f7,color:#fff
+  class T,R db
+  class W,Q,L,U,B agent
+  class AE,Downstream ext
+```
+
+The watch is **on UPDATE filtered by `embedding != null`** — not on INSERT — because Automatic Embeddings runs asynchronously after row insert. Filtering for the embedding-ready UPDATE is what makes the retrieval query non-empty when it fires. See `references/worked-example.md` § "Why watch UPDATE, not INSERT" for the full discussion.
 
 The composition is the headline. Each piece on its own is unremarkable. The Skill ships *the composition* — a worked example where the right Postgres extension, the right Realtime tool, and the right pgvector index are all spec'd in one place, with a regression suite that gates merges.
 

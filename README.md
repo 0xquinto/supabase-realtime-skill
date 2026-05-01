@@ -8,6 +8,35 @@ Agent Skill + MCP server that gives an LLM agent a **bounded primitive for react
 
 The headline pattern is **agent-watches-database**: the agent calls a tool that blocks until either `max_events` arrive *or* `timeout_ms` elapses, then returns the batch. No streaming protocol, no persistent connection across tool-calls — fits MCP's request/response shape and Edge Function isolate budgets (Pro caps wall-clock at 150s; this caps tool timeout at 120s).
 
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Agent
+  participant MCP as MCP Tool<br/>(watch_table)
+  participant Realtime as Supabase Realtime
+  participant PG as Postgres
+
+  Agent->>MCP: call watch_table<br/>{table, predicate, timeout_ms, max_events}
+  MCP->>Realtime: subscribe(topic)
+  Realtime-->>MCP: SUBSCRIBED ack
+  Note over MCP,Realtime: bounded loop:<br/>collect events that match predicate<br/>until max_events OR timeout
+  PG->>Realtime: row INSERT/UPDATE/DELETE
+  Realtime-->>MCP: postgres_changes event
+  PG->>Realtime: ...more events...
+  Realtime-->>MCP: postgres_changes event
+  alt max_events reached
+    MCP-->>MCP: closed_reason = "max_events"
+  else timeout_ms elapsed
+    MCP-->>MCP: closed_reason = "timeout"
+  end
+  MCP->>Realtime: unsubscribe (always — finally)
+  MCP-->>Agent: { events[], closed_reason }
+  Agent->>Agent: process batch, decide next call
+  Note over Agent: loop: call again, or stop
+```
+
+The "boundary" is the tool-call return — that's the natural checkpoint for an agent loop. Persistent WebSocket fights this model; bounded subscription embraces it.
+
 The full narrative — what was tried, what failed, what landed, with the eval numbers — is in [`docs/writeup.md`](docs/writeup.md).
 
 ## Why this exists
