@@ -123,6 +123,24 @@ Calibration sequence (each step in its own ADR; honest, attributable, isolable):
 
 Pre-registered in [`manifest.json`](manifest.json) at v1.0.0; gated via [`eval/runner.ts`](eval/runner.ts); v2.0.0 amendment to bump n→300 deferred per [ADR-0001](docs/decisions/0001-manifest-v1-stays-uncalibrated.md).
 
+Run on demand (locally):
+
+```bash
+EVAL_SUPABASE_PAT=... EVAL_HOST_PROJECT_REF=... ANTHROPIC_API_KEY=... \
+  bun run eval/runner.ts ci-nightly
+# Cost ~$2-3, ~30 min wallclock against a transient Pro branch.
+# Override the routing model with EVAL_TRIAGE_MODEL=claude-sonnet-4-6
+# (default haiku-4-5).
+```
+
+Or via GitHub Actions (`workflow_dispatch`, requires the three secrets set on the repo):
+
+```bash
+gh workflow run ci-nightly.yml -R 0xquinto/supabase-realtime-skill
+```
+
+The cron schedule was dropped (`477d6f5` → followup) — daily runs against a substrate that doesn't change daily are cost burn for no signal. Methodology evidence is the workflow file + the run-on-demand path, not a calendar trigger.
+
 Methodology: 4 metrics, binary scoring, Wilson 95% CIs, McNemar paired-test comparisons. No LLM-as-judge as a gate. See [`references/eval-methodology.md`](references/eval-methodology.md).
 
 ## Decisions + findings

@@ -1,8 +1,18 @@
 name: ci-nightly
 
+# Manual-trigger only. Cron schedule was dropped 2026-05-01 — for a portfolio
+# artifact where main barely changes post-v0.1.x ship, daily runs were ~$60-90/
+# month of API spend reproducing the same numbers that already live in the
+# latest report + ADR addenda. Methodology evidence is the workflow file +
+# on-demand triggers, not the cron itself.
+#
+# Run on demand:
+#   gh workflow run ci-nightly.yml -R 0xquinto/supabase-realtime-skill
+#   (or via Actions UI)
+#
+# Requires repo secrets: EVAL_SUPABASE_PAT, EVAL_HOST_PROJECT_REF,
+# ANTHROPIC_API_KEY. Without them, the run cleanly skips with a notice.
 on:
-  schedule:
-    - cron: "0 7 * * *" # 07:00 UTC daily
   workflow_dispatch:
 
 jobs:
