@@ -190,5 +190,23 @@
     "subject": "Newsletter signup didn't trigger a confirmation email",
     "body": "Signed up for the product newsletter via the marketing site form yesterday and never received a confirmation. Mostly checking it actually went through.",
     "routing": "general"
+  },
+  {
+    "id": "r033",
+    "subject": "Feature request: native HNSW + tag filter optimization for vector search",
+    "body": "We're using pgvector with HNSW for similarity search but have a category column we want to filter by first. The query planner gives us either a sequential scan over the category subset or skips the HNSW entirely. Curious if there's an opinionated pattern coming for 'filter then HNSW' that doesn't degrade to seq-scan. Roadmap-ish question, no urgency.",
+    "routing": "general"
+  },
+  {
+    "id": "r034",
+    "subject": "Feature request: Edge Function cold-start optimization for embedding model loading",
+    "body": "We load a transformers.js model in our Edge Function for query embedding. Cold starts run 3-4 seconds because of model load. Wondering if there's a planned pattern for warm-pool isolates or model-as-asset that could share weights across invocations. Not blocking us; just optimization daydreaming.",
+    "routing": "general"
+  },
+  {
+    "id": "r035",
+    "subject": "Feature request: Realtime broadcast with at-least-once delivery semantics",
+    "body": "Broadcast is great for fire-and-forget, but for agent coordination we sometimes need at-least-once delivery. Today we work around it with pgmq + listen/notify. Is there a roadmap item for opt-in delivery guarantees on broadcast channels? Would simplify our handoff layer.",
+    "routing": "general"
   }
 ]
