@@ -2,14 +2,17 @@
 --
 -- Worked-example schema for the support-ticket triage agent.
 --
--- Embeddings: 384-dim halfvec via the all-MiniLM-L6-v2 local model
--- (Transformers.js / sentence-transformers). Pre-computed by
--- `eval/embed-corpus.ts` and inserted by the runner. The composition
--- pattern (CDC → embed → pgvector retrieval → action) is identical to
--- the Supabase Automatic Embeddings + OpenAI 1536-dim flow described
--- in references/pgvector-composition.md; only the embedding provider
--- differs. This dim is chosen so the eval has zero external API
--- dependencies.
+-- Embedding column: halfvec(1536) — Supabase Automatic Embeddings shape
+-- (OpenAI text-embedding-3-small or equivalent). Production deployments
+-- run Automatic Embeddings via pgmq + pg_cron + an Edge Function to
+-- populate this column asynchronously on INSERT.
+--
+-- The bundled eval supports two paths:
+--   1. With OPENAI_API_KEY set: spec-compliant 1536-dim flow (no schema override)
+--   2. Without OPENAI_API_KEY: local Transformers.js fallback (384-dim);
+--      eval/runner.ts applies eval-dim-override-384.sql to ALTER the
+--      column type before seeding.
+-- See references/pgvector-composition.md for the full provider design.
 
 create extension if not exists vector;
 
@@ -20,7 +23,7 @@ create table support_tickets (
   body text not null,
   status text not null default 'open' check (status in ('open', 'in_progress', 'resolved')),
   routing text check (routing in ('urgent', 'engineering', 'billing', 'general')),
-  embedding halfvec(384),
+  embedding halfvec(1536),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

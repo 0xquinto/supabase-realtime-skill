@@ -90,19 +90,25 @@ async function main(): Promise<void> {
       const dbUrl = buildBranchPoolerUrl({ ref: details.ref, db_pass: details.db_pass }, REGION);
 
       // Load pre-computed embeddings (built by `node eval/embed-corpus.mjs`).
-      // Map shape: { fixture_id: number[384] }.
-      const embeddings = JSON.parse(await readFile("fixtures/embeddings.json", "utf-8")) as Record<
-        string,
-        number[]
-      >;
+      // Format: { provider, dim, embeddings: { fixture_id: number[] } }.
+      const embeddingsFile = JSON.parse(await readFile("fixtures/embeddings.json", "utf-8")) as {
+        provider: string;
+        dim: number;
+        embeddings: Record<string, number[]>;
+      };
+      const embeddings = embeddingsFile.embeddings;
       const resolvedCorpus = JSON.parse(
         await readFile("fixtures/resolved-corpus.json", "utf-8"),
       ) as { id: string; subject: string; body: string; routing: string }[];
+      console.log(
+        `[runner] embeddings: provider=${embeddingsFile.provider} dim=${embeddingsFile.dim}`,
+      );
 
-      // Apply migrations + seed resolved-corpus tickets with embeddings.
-      // The corpus gives the triage agent's pgvector retrieval real
-      // semantic neighbors to retrieve from; without it, top-K retrieval
-      // would always be empty.
+      // Apply canonical migration; if the embedding dim isn't the spec-default
+      // 1536, apply the eval-only override that resizes the column + index.
+      // Then seed resolved-corpus tickets with embeddings — gives the
+      // triage agent's pgvector retrieval real semantic neighbors to
+      // retrieve from; without seeding, top-K retrieval is empty.
       const migration = await readFile(
         "supabase/migrations/20260430000001_support_tickets.sql",
         "utf-8",
@@ -110,6 +116,12 @@ async function main(): Promise<void> {
       const sql = postgres(dbUrl, { max: 1, prepare: false });
       try {
         await sql.unsafe(migration);
+        if (embeddingsFile.dim !== 1536) {
+          const overridePath = `eval/migrations/eval-dim-override-${embeddingsFile.dim}.sql`;
+          const override = await readFile(overridePath, "utf-8");
+          console.log(`[runner] applying ${overridePath}`);
+          await sql.unsafe(override);
+        }
         for (const item of resolvedCorpus) {
           const emb = embeddings[item.id];
           if (!emb) {

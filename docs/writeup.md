@@ -18,7 +18,7 @@ The Skill+MCP paired form factor matters here. The Skill (`SKILL.md` + `referenc
 
 ## 2. Worked example: support-ticket triage
 
-A SaaS app has a `support_tickets` table. Tickets get auto-embedded — production via Supabase Automatic Embeddings to `halfvec(1536)`, the bundled eval via a pre-computed `halfvec(384)` cache so the harness has zero external API dependencies. Either way, the row arrives with an embedding. The triage agent watches the table, retrieves the most-similar past resolved tickets via pgvector cosine similarity, decides routing (`urgent | engineering | billing | general`), writes the routing back, and broadcasts a `ticket-routed` event so a downstream handoff agent picks it up.
+A SaaS app has a `support_tickets` table. Tickets get auto-embedded via Supabase Automatic Embeddings, which writes a `halfvec(1536)` to `embedding`. The triage agent watches the table for embedded-ready tickets, retrieves the most-similar past resolved tickets via pgvector cosine similarity, decides routing (`urgent | engineering | billing | general`), writes the routing back, and broadcasts a `ticket-routed` event so a downstream handoff agent picks it up. The bundled eval supports the same flow via a zero-deps Transformers.js fallback (`halfvec(384)` via an eval-only schema override) so the harness can be reproduced anywhere a transient branch can be made — see `references/pgvector-composition.md` for both paths.
 
 ```ts
 const adapter = makeSupabaseAdapter("support_tickets", { supabaseUrl, supabaseKey });

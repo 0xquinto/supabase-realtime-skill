@@ -6,7 +6,7 @@ End-to-end walkthrough of the worked example referenced in `SKILL.md`. The agent
 
 See `supabase/migrations/20260430000001_support_tickets.sql`. Highlights:
 
-- `embedding halfvec(384)` populated either by Supabase Automatic Embeddings (production; async; agent never triggers it) or pre-computed by the eval harness (`fixtures/embeddings.json` via `eval/embed-corpus.mjs`). Production deployments using OpenAI 1536-dim swap the column type and the embed call — see `references/pgvector-composition.md` § "A note on what this repo's eval actually runs".
+- `embedding halfvec(1536)` populated by Supabase Automatic Embeddings (production; async; agent never triggers it). The bundled eval supports a zero-deps fallback path that swaps to `halfvec(384)` via `eval/migrations/eval-dim-override-384.sql` and a local Transformers.js model — see `references/pgvector-composition.md` § "Two embedding-provider paths".
 - HNSW index on the embedding for fast similarity search
 - `replica identity full` so UPDATE events carry the old row
 - Added to `supabase_realtime` publication

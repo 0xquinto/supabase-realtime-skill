@@ -56,15 +56,20 @@ create index <your_table>_embedding_hnsw
 
 `halfvec(1536)` is the recommended Supabase Automatic Embeddings shape (April 2026) — half the storage of `vector(1536)` with negligible quality loss. Use HNSW over IVFFlat unless your dataset is >1M rows; HNSW indexes faster and has lower query latency in the typical agent-retrieval range.
 
-### A note on what this repo's eval actually runs
+### Two embedding-provider paths
 
-The bundled eval harness (`eval/embed-corpus.mjs` + `eval/triage-agent.ts`) uses **`halfvec(384)` with the local `Xenova/all-MiniLM-L6-v2` sentence-transformer** instead of OpenAI 1536-dim. The reasoning: the harness must run end-to-end with zero external API dependencies (no OpenAI/Voyage key requirement), so the eval can be reproduced anywhere a transient Supabase branch can be created. The retrieval *pattern* is identical — `order by embedding <=> $query_embedding` — only the dimension and provider differ. Production deployments swapping in OpenAI 1536-dim need only:
+The bundled eval harness supports both the spec-default substrate and a zero-deps fallback. `eval/embed-corpus.mjs` picks based on `OPENAI_API_KEY`:
 
-1. Bump the column to `halfvec(1536)` in the migration
-2. Replace the Transformers.js call in `eval/embed-corpus.mjs` with the OpenAI embeddings API
-3. Wire Automatic Embeddings (or the equivalent) in production so the embedding column populates async on INSERT
+| Provider | Dim | Trigger | Migration path |
+|---|---|---|---|
+| OpenAI `text-embedding-3-small` | 1536 | `OPENAI_API_KEY` set | canonical migration only — matches Supabase Automatic Embeddings shape |
+| Transformers.js `Xenova/all-MiniLM-L6-v2` | 384 | `OPENAI_API_KEY` unset | canonical migration + `eval/migrations/eval-dim-override-384.sql` |
 
-The harness pre-computes embeddings into `fixtures/embeddings.json` rather than embedding at trial-time. This makes the eval deterministic across runs (same vectors → same retrieval order → same LLM context) and removes embedding-API latency from the measurement.
+The OpenAI path is the spec-compliant one. Production deployments using Automatic Embeddings get exactly this column shape — `halfvec(1536)` with text-embedding-3-small (or equivalent) populating the column async via pgmq. Cost for the full eval corpus (~152 items × ~150 tokens) is well under $0.001.
+
+The Transformers.js fallback exists so the eval can be reproduced anywhere a transient Supabase branch can be made — no OpenAI key required, no rate-limit dependence, no cost. The override migration drops the HNSW index, ALTERs the column to `halfvec(384)`, and recreates the index. The retrieval *pattern* (`order by embedding <=> $query`) is identical; only dim and provider differ.
+
+The harness pre-computes embeddings into `fixtures/embeddings.json` (with metadata `{ provider, dim, embeddings }`) rather than embedding at trial-time. This makes runs deterministic (same vectors → same retrieval order → same LLM context) and removes embedding-API latency from the substrate measurement.
 
 ## See also
 
