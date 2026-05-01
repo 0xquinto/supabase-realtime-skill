@@ -163,6 +163,8 @@ These are recommendations, not decisions — the ADR will be filed as **Proposed
 - Whether `pg_logical_emit_message()` is available on Supabase Pro — affects whether the no-table CDC variant is a viable alternative shape.
 - Whether the supabase/agent-skills maintainers have an unpublished design doc that would change positioning.
 
+**→ Refresh executed:** [`playbook/research/2026-05-01-deterministic-modules-external-refresh.md`](../../playbook/research/2026-05-01-deterministic-modules-external-refresh.md) captures the searches run, what landed in ADR-0010, and what's still open.
+
 ## References
 
 **Internal:**

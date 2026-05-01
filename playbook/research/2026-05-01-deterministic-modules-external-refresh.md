@@ -131,3 +131,14 @@ The other URLs in this file (Restate v1.6.1, pydantic-ai #5041, Hatchet release 
 - [PostgreSQL 15 — Logical Replication Architecture](https://www.postgresql.org/docs/15/logical-replication-architecture.html)
 - [Supabase Docs — Setup external replication](https://supabase.com/docs/guides/database/postgres/setup-replication-external)
 - [Supabase Realtime — Postgres CDC](https://supabase.com/docs/guides/realtime/postgres-cdc)
+
+**Supplementary URLs cited by ADR-0010, sourced from the recon (not from this 2026-05-01 refresh sweep — included here so the audit trail is self-contained):**
+- [Anthropic — Writing tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents) — the deterministic-contract quote + `schedule_event` example
+- [Anthropic — Code execution with MCP](https://www.anthropic.com/engineering/code-execution-with-mcp) — skill-module pattern
+- [Anthropic — Equipping agents with Skills](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills) — incremental skill build via evaluation
+- [Decodable — Revisiting the Outbox Pattern](https://www.decodable.co/blog/revisiting-the-outbox-pattern) — CDC-vs-outbox-table critique informing the naming
+- [Debezium Outbox Event Router](https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html) — canonical schema + ordering semantics
+- [Inngest — Durable Execution](https://www.inngest.com/blog/durable-execution-key-to-harnessing-ai-agents) — adjacent / complementary primitive (workflow-side)
+- [event-driven.io — Push-based outbox](https://event-driven.io/en/push_based_outbox_pattern_with_postgres_logical_replication/) — log-based replication tradeoffs
+- [Supabase Queues / pgmq blog](https://supabase.com/blog/supabase-queues) — platform queueing stance (informs v0.3 pre-stage)
+- [supabase/agent-skills repo](https://github.com/supabase/agent-skills) — current skill catalog gap (relevant to T31 / ADR-0004)

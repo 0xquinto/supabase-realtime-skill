@@ -26,17 +26,17 @@ The novelty isn't the principle — Anthropic published it. The novelty is **pac
 
 ## What changed since the recon
 
-The recon flagged three open questions for the ADR pass to refresh. Quick refresh sweep done 2026-05-01:
+The recon flagged three open questions for the ADR pass to refresh. Quick refresh sweep done 2026-05-01; durable record at [`playbook/research/2026-05-01-deterministic-modules-external-refresh.md`](../../playbook/research/2026-05-01-deterministic-modules-external-refresh.md).
 
-1. **Cloudflare Project Think + `Agent.runFiber()`** ([PR #1256, Apr 4 2026](https://github.com/cloudflare/agents/pull/1256); [Project Think launch, Apr 15 2026](https://blog.cloudflare.com/project-think/)) shipped durable execution baked into the base Agent class on Cloudflare Durable Objects — LLM streams that survive eviction, durable cross-DO RPC, persistent sessions. **Larger than the recon assumed.** Still workflow-level (the agent's *loop* is durable), not substrate-level (the database events the agent *observes* are not what's being made durable). The orthogonality holds: Cloudflare makes the agent's reasoning durable; this artifact makes the substrate the agent observes deterministic. They compose.
+**Q1 — Restate / Hatchet / Cloudflare DO recent (Q1-Q2 2026) agent offerings.** Three findings:
 
-2. **Restate** released v1.6.0 (Jan 30) and shipped integrations with the [OpenAI Agents SDK](https://github.com/openai/openai-agents-python/pull/2359) and [pydantic-ai](https://github.com/pydantic/pydantic-ai/pull/5041), introducing `@durable_function_tool` — making **tool calls** durable. That's tool-side, not substrate-side, and complementary: a `boundedQueueDrain` invocation could itself be wrapped in a Restate-durable tool with no surface conflict. Worth name-checking; doesn't change the design.
+- **Cloudflare Project Think + `Agent.runFiber()`** ([PR #1256, Apr 4 2026](https://github.com/cloudflare/agents/pull/1256); [Project Think launch, Apr 15 2026](https://blog.cloudflare.com/project-think/)) shipped durable execution baked into the base Agent class on Cloudflare Durable Objects — LLM streams that survive eviction, durable cross-DO RPC, persistent sessions. **Larger than the recon assumed.** Still workflow-level (the agent's *loop* is durable), not substrate-level (the database events the agent *observes* are not what's being made durable). The orthogonality holds: Cloudflare makes the agent's reasoning durable; this artifact makes the substrate the agent observes deterministic. They compose.
+- **Restate** released v1.6.0 (Jan 30) and shipped integrations with the [OpenAI Agents SDK](https://github.com/openai/openai-agents-python/pull/2359) and [pydantic-ai](https://github.com/pydantic/pydantic-ai/pull/5041), introducing `@durable_function_tool` — making **tool calls** durable. That's tool-side, not substrate-side, and complementary: a `boundedQueueDrain` invocation could itself be wrapped in a Restate-durable tool with no surface conflict. Worth name-checking; doesn't change the design.
+- **Hatchet** ([@v0.83.30](https://github.com/hatchet-dev/hatchet/releases/tag/v0.83.30); [MCP runtime PR #3255, Mar 12 2026](https://github.com/hatchet-dev/hatchet/pull/3255)) is the closest neighbor — a durable PG-backed task queue with an MCP endpoint exposing queue metrics to agents. Hatchet is the broker; agents observe it. This artifact's value is the inverse: a primitive on Supabase substrate the user already has, no new broker to adopt. Different positioning.
 
-3. **Hatchet** ([@v0.83.30](https://github.com/hatchet-dev/hatchet/releases/tag/v0.83.30); [MCP runtime PR #3255, Mar 12 2026](https://github.com/hatchet-dev/hatchet/pull/3255)) is the closest neighbor — a durable PG-backed task queue with an MCP endpoint exposing queue metrics to agents. Hatchet is the broker; agents observe it. This artifact's value is the inverse: a primitive on Supabase substrate the user already has, no new broker to adopt. Different positioning.
+**Q2 — `pg_logical_emit_message` availability on Supabase Pro.** Not authoritatively confirmed in the sweep. It's a standard Postgres function (no extension required), Supabase Pro grants the privileges needed for `pg_create_logical_replication_slot`, so the function is **likely available** but verification is left to v0.3 if the no-table CDC variant is pursued. **Not load-bearing for v0.2.** ADR-0007's manifest expansion holds independent of this.
 
-4. **`pg_logical_emit_message`** availability on Supabase Pro: not authoritatively confirmed in the 5-min sweep. It's a standard Postgres function (no extension required), Supabase Pro grants the privileges needed for `pg_create_logical_replication_slot`, so the function is **likely available** but verification is left to v0.3 if the no-table CDC variant is pursued. **Not load-bearing for v0.2.** ADR-0007's manifest expansion holds independent of this.
-
-5. **`supabase/agent-skills` maintainer's design direction**: unknowable without operator outreach (T31 / ADR-0004). This ADR doesn't depend on upstream alignment; if T31 / option (B) lands, this module's reference page can be PR'd as a fourth reference file.
+**Q3 — `supabase/agent-skills` maintainer's unpublished design direction.** Unknowable without operator outreach (T31 / ADR-0004). This ADR doesn't depend on upstream alignment; if T31 / option (B) lands, this module's reference page can be PR'd as a fourth reference file.
 
 ## Decisions
 
@@ -64,26 +64,26 @@ Compromise: the v0.2 module *accepts* a `dead_letter_table` parameter and, if pr
 
 **What this rejects:** option (b) (return a structured "DLQ candidate" for the operator to handle) introduces an ergonomics break that complicates the loop. Option (c) (operator's responsibility entirely) leaves the load-bearing reliability surface unspecified and is what the current `references/outbox-forwarder.md` does — promoting the module without picking up DLQ would not earn its keep.
 
-### 4. Drain-semantics contract: at-least-once is the documented default, effectively-once is a contract surface
+### 4. Drain-semantics contract: at-least-once is the documented default; surface it in docs, not (yet) in the type system
 
-The current `references/outbox-forwarder.md` § "Production hardening notes" buries the at-least-once truth as a footnote. The module's typed signature surfaces it:
+The current `references/outbox-forwarder.md` § "Production hardening notes" buries the at-least-once truth as a footnote. The recon (§ "Where design risk concentrates" item 2) calls hidden semantics the top sharp-edges risk for this module — operators who assume idempotent-by-default get burned silently. Fix: surface the contract explicitly in (a) the typedoc comment on `BoundedQueueDrainOptions`, (b) the reference page's first paragraph, and (c) `SKILL.md`'s description of the module.
 
 ```ts
 type BoundedQueueDrainOptions = {
   // ... adapter, table, etc ...
   /**
-   * At-least-once is the only honest default. Each row may be forwarded
+   * IMPORTANT: this module is at-least-once. Each row may be forwarded
    * more than once if the broadcast succeeds but the ack UPDATE fails.
    * Subscribers MUST be idempotent. To upgrade to effectively-once, the
-   * operator must run a consumer-side inbox table — see references/queue-drain-semantics.md.
+   * operator runs a consumer-side inbox table — see
+   * references/queue-drain-semantics.md.
    */
-  semantics: "at-least-once";  // literal type, not enum — v0.2 ships one option
 }
 ```
 
-The literal-type design (`semantics: "at-least-once"` as a required field, not a default) forces the operator to acknowledge the contract at the call site. v0.3 might add `"effectively-once"` if the consumer-side inbox pattern is shipped as a second module — at that point the literal becomes a discriminated union. v0.2 ships single-value, deliberate.
+**What this rejects:** an earlier draft considered a required literal field `semantics: "at-least-once"` to force operator acknowledgment at the call site. That's friction without information gain at v0.2 (a required field with one allowed value the type system can't help reject). Defer the literal-typed approach to **the moment** v0.3 introduces a second value (e.g., `"effectively-once"`) — at that point a discriminated union earns its keep. Until then, docs-side discipline carries the contract.
 
-**Trade-off:** this is friction on every call site for a property the operator might consider obvious. The friction is the point — the recon's "where design risk concentrates" § names hidden semantics as the top sharp-edges risk for this module. The codebase's existing sharp-edges work (replication-identity, warm-up window) argues for explicit-over-ergonomic.
+This matches the codebase's existing sharp-edges work (replication-identity, warm-up window): those are documented contract surfaces, not type-enforced ones. Consistency with prior shapes is a small but real JD-signal point.
 
 ### 5. Ordering: per-aggregate, disclaimed in the contract
 
@@ -95,14 +95,16 @@ The module's docs name this directly. The typed contract does not enforce per-ag
 
 `forward_correctness_rate_min` is the primary metric. The fixture asks: did the drain leave the queue in the correct end-state (all forwardable rows forwarded; all poison rows in DLQ; no dupes that the broadcast handler wouldn't catch)? Binary per fixture. Wilson-CI gateable on the same n=300 corpus that ADR-0007 pre-stages.
 
-**Pre-staged manifest cells (amendments to ADR-0007's v2.0.0 design):**
+**Pre-staged manifest cells (amendments to ADR-0007's v2.0.0 design — numeric thresholds tentative):**
 
-| Cell | v2.0.0 (current ADR-0007) | v2.0.0 with this ADR amendment | Rationale |
+| Cell | v2.0.0 (current ADR-0007) | v2.0.0 with this ADR amendment (tentative) | Rationale |
 |---|---|---|---|
-| `forward_correctness_rate_min` | (not defined) | 0.95 | Substrate composition + handler retry envelope should leave at most ~5% of fixtures in incorrect end-state under realistic poison-row injection. Tighter than `action_correctness` because the work is mechanical (no LLM-judgment-call surface). |
-| `forward_correctness_ci_low_min` | (not defined) | 0.92 | Wilson lower at n=300, p̂=0.95 ≈ 0.918. Setting floor at 0.92 keeps a small cushion. |
+| `forward_correctness_rate_min` | (not defined) | 0.95 *(tentative)* | Substrate composition + handler retry envelope should leave at most ~5% of fixtures in incorrect end-state under realistic poison-row injection. Tighter than `action_correctness` because the work is mechanical (no LLM-judgment-call surface). **No baseline run yet** — number is a target, not yet evidence-backed. |
+| `forward_correctness_ci_low_min` | (not defined) | 0.92 *(tentative)* | Wilson lower at n=300, p̂=0.95 ≈ 0.918. Setting floor at 0.92 keeps a small cushion. **Mechanical math holds; the rate it gates against is the tentative cell above.** |
 
-Single primary metric chosen deliberately. The recon's other candidates (`ack_durability_rate_min`, `at_least_once_holds_rate_min`) are deferred as **candidate v3 amendments** if `forward_correctness_rate_min` proves too coarse. Multi-metric gating without paired CI math drifts toward LLM-judge-as-gate (anti-pattern; playbook § 8).
+**Calibration discipline (mirrors ADR-0007 § "action_correctness conditional on ADR-0006"):** the `0.95 / 0.92` numbers are *targets* for the pre-staged design, not committed thresholds. The actual cells lock at the moment the v0.2 baseline run lands at n=100 (Migration step 5), at which point this ADR amendment moves to a status update with the empirical p̂ replacing the tentative target. If the baseline reveals the substrate is meaningfully cleaner or dirtier, the threshold cell moves accordingly — same loop ADR-0001 documented for v1.0.0 → v2.0.0.
+
+Single primary metric chosen deliberately. The recon's other candidates (`ack_durability_rate_min`, `at_least_once_holds_rate_min`) are deferred as **candidate follow-up amendments** if `forward_correctness_rate_min` proves too coarse. Multi-metric gating without paired CI math drifts toward LLM-judge-as-gate (anti-pattern; playbook § 8).
 
 ### 7. Replication-identity prerequisites: documented divergence from `watch_table`
 
