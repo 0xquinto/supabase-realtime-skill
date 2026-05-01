@@ -1,6 +1,6 @@
 # References — Outbox forwarder: a non-LLM worked example
 
-> **Status note (2026-05-01):** A Proposed promotion of this pattern to a typed module (`boundedQueueDrain`) is on the table — see [ADR-0010](../docs/decisions/0010-bounded-queue-drain.md). The current page documents composition-by-hand; if ADR-0010 is Accepted, this page is replaced by `references/queue-drain.md` with a typed contract surface, optional `dead_letter_table` parameter, and a manifest-gated eval.
+> **Promoted (2026-05-01):** the typed-module shape of this pattern lives at [`references/queue-drain.md`](queue-drain.md). It composes the same primitives this page documents (`boundedWatch` + `handleBroadcast` + a SQL ack) with one entry point (`boundedQueueDrain`), an optional `dead_letter` callback, and a manifest-gated eval. Use the module if you want the typed contract surface; the manual composition documented below still works (it's what the module ships *as*) and remains the right reference if you need a non-SQL DLQ shape that doesn't fit a callback (e.g., posting to Redis) — see [ADR-0010 § "What this rejects"](../docs/decisions/0010-bounded-queue-drain.md). 
 
 A second worked example that exercises the bounded-subscription primitive **without** an LLM in the loop. The triage agent (`worked-example.md`) shows the substrate composing with pgvector + LLM routing; this one shows it composing with plain Postgres + Broadcast for fan-out, proving the substrate generalizes beyond AI-shaped use cases.
 
