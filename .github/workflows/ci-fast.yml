@@ -22,18 +22,33 @@ jobs:
   ci-fast-eval:
     runs-on: ubuntu-latest
     needs: fast
-    if: ${{ secrets.EVAL_SUPABASE_PAT != '' }}
     env:
       EVAL_SUPABASE_PAT: ${{ secrets.EVAL_SUPABASE_PAT }}
       EVAL_HOST_PROJECT_REF: ${{ secrets.EVAL_HOST_PROJECT_REF }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
-      - run: bun install --frozen-lockfile
-      - run: bun run eval/runner.ts ci-fast
-      - uses: actions/upload-artifact@v4
-        if: always()
+      # GitHub Actions disallows `secrets.X` in job-level `if:` for security;
+      # gate via a step output instead so forks/PRs without eval secrets
+      # cleanly skip rather than fail the whole workflow.
+      - name: Check eval secrets
+        id: have
+        run: |
+          if [ -n "$EVAL_SUPABASE_PAT" ] && [ -n "$EVAL_HOST_PROJECT_REF" ]; then
+            echo "secrets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "secrets=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::eval secrets not configured; skipping ci-fast-eval"
+          fi
+      - if: steps.have.outputs.secrets == 'true'
+        uses: actions/checkout@v4
+      - if: steps.have.outputs.secrets == 'true'
+        uses: oven-sh/setup-bun@v1
+      - if: steps.have.outputs.secrets == 'true'
+        run: bun install --frozen-lockfile
+      - if: steps.have.outputs.secrets == 'true'
+        run: bun run eval/runner.ts ci-fast
+      - if: ${{ always() && steps.have.outputs.secrets == 'true' }}
+        uses: actions/upload-artifact@v4
         with:
           name: ci-fast-report
           path: eval/reports/
