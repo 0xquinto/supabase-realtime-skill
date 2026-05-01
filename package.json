@@ -25,17 +25,19 @@
   "type": "module",
   "exports": {
     ".": {
+      "types": "./dist/client/index.d.ts",
       "import": "./dist/client/index.js",
       "require": "./dist/client/index.cjs"
     },
     "./server": {
+      "types": "./dist/server/index.d.ts",
       "import": "./dist/server/index.js",
       "require": "./dist/server/index.cjs"
     }
   },
   "files": ["dist", "SKILL.md", "references", "manifest.json"],
   "scripts": {
-    "build": "bun build src/client/index.ts --outdir dist/client --target node && bun build src/client/index.ts --outfile dist/client/index.cjs --target node --format cjs && bun build src/server/index.ts --outdir dist/server --target node && bun build src/server/index.ts --outfile dist/server/index.cjs --target node --format cjs",
+    "build": "tsup",
     "test:fast": "vitest run --project fast",
     "test:smoke": "vitest run --project smoke --passWithNoTests",
     "typecheck": "tsc --noEmit",
@@ -44,7 +46,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
-    "@huggingface/transformers": "^4.2.0",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@supabase/supabase-js": "^2.45.0",
     "postgres": "^3.4.9",
@@ -52,7 +53,9 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",
+    "@huggingface/transformers": "^4.2.0",
     "@types/node": "^22.0.0",
+    "tsup": "^8.5.1",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   },

@@ -21,7 +21,7 @@ bun run test:smoke                   # 5 online smoke tests against real branche
 bun run typecheck                    # tsc --noEmit
 bun run lint                         # biome check
 bun run lint:fix                     # biome check --write
-bun run build                        # bun bundler → dist/{client,server}/index.{js,cjs}
+bun run build                        # tsup → dist/{client,server}/index.{js,cjs,d.ts,d.cts}
 
 bun run eval/spike-latency.ts        # n=20 latency check (Phase 1 gate)
 bun run eval/runner.ts ci-fast       # fixtures × triage × manifest gate (~$0.50, 5 min)
@@ -60,7 +60,7 @@ These came out of the spike. Future work must respect them or it'll regress.
 
 ### `.ts` extensions on ALL relative imports
 
-Deno's bundler (used by `supabase functions deploy`) doesn't fake-resolve `.js` to `.ts` source the way `tsc --moduleResolution: "bundler"` does. The codebase uses explicit `.ts` extensions throughout (`from "./foo.ts"` not `from "./foo"` and not `from "./foo.js"`). `tsconfig.json` has `allowImportingTsExtensions: true` (satisfied by `tsc --noEmit`); `bun build` rewrites to `.js` in published output. See `docs/spike-findings.md` § Resolution.
+Deno's bundler (used by `supabase functions deploy`) doesn't fake-resolve `.js` to `.ts` source the way `tsc --moduleResolution: "bundler"` does. The codebase uses explicit `.ts` extensions throughout (`from "./foo.ts"` not `from "./foo"` and not `from "./foo.js"`). `tsconfig.json` has `allowImportingTsExtensions: true` (satisfied by `tsc --noEmit`); `tsup` (the npm-package builder, configured via `tsup.config.ts`) rewrites `.ts` → `.js` in the published output and emits matching `.d.ts`/`.d.cts` declarations. See `docs/spike-findings.md` § Resolution.
 
 **If you add a new file**, every import in it (and every import OF it) needs `.ts`. Bare specifiers (`@modelcontextprotocol/sdk/server/index.js`) stay bare.
 
