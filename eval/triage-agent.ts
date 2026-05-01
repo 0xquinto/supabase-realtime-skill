@@ -128,9 +128,12 @@ export async function triageOne(input: TriageInput): Promise<TriageResult> {
     `;
 
     // LLM routing decision. haiku-4-5 is the canonical cost-sensitive
-    // model in supabase-mcp-evals/CLAUDE.md.
+    // model in supabase-mcp-evals/CLAUDE.md. Override via EVAL_TRIAGE_MODEL
+    // env (e.g., `claude-sonnet-4-6`) for the multi-model probe — see
+    // ADR-0006's v0.2 follow-ups + task [I] in docs/ship-status.md.
+    const triageModel = process.env.EVAL_TRIAGE_MODEL ?? "claude-haiku-4-5";
     const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
+      model: triageModel,
       max_tokens: 100,
       messages: [
         {
