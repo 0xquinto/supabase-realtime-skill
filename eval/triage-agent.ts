@@ -17,6 +17,7 @@ export interface TriageInput {
     id: string;
     ticket: { subject: string; body: string };
     expected_routing: string;
+    embedding: number[];
   };
   supabaseUrl: string;
   supabaseKey: string;
@@ -65,10 +66,12 @@ export async function triageOne(input: TriageInput): Promise<TriageResult> {
     });
 
     const insertedAt = Date.now();
+    // halfvec literal accepted by pgvector via `[a,b,c]` text form.
+    const embeddingLiteral = `[${input.fixture.embedding.join(",")}]`;
     setTimeout(() => {
       sql`
-        insert into support_tickets (customer_id, subject, body)
-        values (gen_random_uuid(), ${input.fixture.ticket.subject}, ${input.fixture.ticket.body})
+        insert into support_tickets (customer_id, subject, body, embedding)
+        values (gen_random_uuid(), ${input.fixture.ticket.subject}, ${input.fixture.ticket.body}, ${embeddingLiteral})
       `.catch(() => {
         // Insert errors surface as a watch timeout below. Swallowing here
         // keeps the unhandled-rejection noise out of the runner's logs.
@@ -112,13 +115,15 @@ export async function triageOne(input: TriageInput): Promise<TriageResult> {
     }
     const ticketId = ticket.id;
 
-    // Retrieve 5 most-similar past resolved tickets (recency-as-similarity
-    // proxy for v1; vector embeddings are out of scope for the worked
-    // example).
+    // Retrieve 5 most-similar past resolved tickets via pgvector cosine
+    // similarity. The embedding column is halfvec(384) populated either
+    // synchronously (here, with the pre-computed embedding from
+    // fixtures/embeddings.json) or asynchronously in production via
+    // Supabase Automatic Embeddings — same retrieval pattern either way.
     const similar = await sql<{ subject: string; routing: string }[]>`
       select subject, routing from support_tickets
       where status = 'resolved' and routing is not null and id != ${ticketId}
-      order by created_at desc
+      order by embedding <=> ${embeddingLiteral}
       limit 5
     `;
 

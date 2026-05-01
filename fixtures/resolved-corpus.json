@@ -1,0 +1,194 @@
+[
+  {
+    "id": "r001",
+    "subject": "Production database outage — all writes failing with connection refused",
+    "body": "Primary Postgres instance went unreachable 6 minutes ago. Every API call returning 503; failover hasn't triggered. Need immediate intervention from infra.",
+    "routing": "urgent"
+  },
+  {
+    "id": "r002",
+    "subject": "Suspected breach: unauthorized API token usage from foreign IP",
+    "body": "Our audit logs show a service-role token making 12,000 reads from an IP we don't recognize over the last hour. Need token revocation and breach assessment now.",
+    "routing": "urgent"
+  },
+  {
+    "id": "r003",
+    "subject": "Data loss: 4,200 rows missing after migration deployment",
+    "body": "Post-deploy at 02:00 UTC, the orders table shows 4,200 fewer records than the pre-deploy snapshot. Need point-in-time recovery to before the migration window. Production data emergency.",
+    "routing": "urgent"
+  },
+  {
+    "id": "r004",
+    "subject": "Payment processing 100% failure rate — Stripe webhooks dead",
+    "body": "All checkout attempts failing for the last 18 minutes. Stripe is reporting webhook delivery 500s on our endpoint. Customers can't complete purchases. Hemorrhaging revenue.",
+    "routing": "urgent"
+  },
+  {
+    "id": "r005",
+    "subject": "Cross-tenant data leak: org A users seeing org B records",
+    "body": "Discovered RLS bypass via the search endpoint — org A users can retrieve org B's customer records. Active CCPA exposure. Need policy lockdown immediately.",
+    "routing": "urgent"
+  },
+  {
+    "id": "r006",
+    "subject": "Production traffic spike caused database CPU at 100% — site unreachable",
+    "body": "Database hit 100% CPU at 14:30 UTC; all reads queueing. Connection pool exhausted. Site fully unreachable for 11 minutes. Need post-incident review and immediate scaling.",
+    "routing": "urgent"
+  },
+  {
+    "id": "r007",
+    "subject": "Critical: TLS certificate expired, all HTTPS traffic rejected",
+    "body": "Wildcard cert for *.example.com expired 24 minutes ago — auto-renewal didn't fire. Every API client returning SSL errors. Need cert rotated and DNS verification redone now.",
+    "routing": "urgent"
+  },
+  {
+    "id": "r008",
+    "subject": "Active DDoS — malicious traffic saturating edge layer",
+    "body": "Inbound traffic 40× normal from coordinated botnet. CDN rate-limiting overwhelmed. Need traffic filtering policy applied at edge and emergency capacity.",
+    "routing": "urgent"
+  },
+  {
+    "id": "r009",
+    "subject": "TypeScript types missing for createClient generic constraint",
+    "body": "Using @supabase/supabase-js v2.45 — the createClient<Database> generic isn't propagating to .from() return types. Are the type files emitted in this version? IDE shows `any` everywhere.",
+    "routing": "engineering"
+  },
+  {
+    "id": "r010",
+    "subject": "How to verify Stripe webhook signature in an Edge Function",
+    "body": "Building a webhook handler in supabase/functions/. The Stripe SDK's constructEvent() requires a raw body but the Edge Function gives me parsed JSON. What's the canonical pattern for accessing the raw bytes?",
+    "routing": "engineering"
+  },
+  {
+    "id": "r011",
+    "subject": "Edge Function deploy fails: Cannot resolve module from npm: specifier",
+    "body": "When I deploy my function the bundler throws 'Module not found' on a deep import from an npm package. Local supabase functions serve resolves it fine. What's different in the deploy bundler?",
+    "routing": "engineering"
+  },
+  {
+    "id": "r012",
+    "subject": "Migration adds RLS policy but existing service-role queries now fail",
+    "body": "After applying a migration that enables RLS on orders and adds a SELECT policy, our backend service queries (using service_role key) return empty results. I thought service_role bypassed RLS — what's going on?",
+    "routing": "engineering"
+  },
+  {
+    "id": "r013",
+    "subject": "Query performance regression after upgrading to Postgres 15",
+    "body": "A join that ran in 80ms on PG14 now takes 2.4s on PG15 against the same data. EXPLAIN shows a different plan — sequential scan instead of index scan. Need help reading the planner output and forcing the right plan.",
+    "routing": "engineering"
+  },
+  {
+    "id": "r014",
+    "subject": "Realtime subscription receives no events for 5 seconds after subscribe",
+    "body": "Subscribing to a freshly published table — the SUBSCRIBED callback fires, but INSERTs in the first 5 seconds don't deliver. After that, events flow normally. Is this expected?",
+    "routing": "engineering"
+  },
+  {
+    "id": "r015",
+    "subject": "pgvector index slow on halfvec — should it be HNSW or IVFFlat?",
+    "body": "I have a halfvec(1536) column with 800k rows. HNSW build is taking forever. Should I use IVFFlat for this scale, and what lists/probes parameters work? Need guidance on tuning.",
+    "routing": "engineering"
+  },
+  {
+    "id": "r016",
+    "subject": "Auth JWT not propagating to Postgres — request.jwt.claims is empty",
+    "body": "I'm calling a Postgres function from the API and trying to read auth.jwt() inside, but it returns null. Token is valid (verified via /auth/v1/user). What configuration am I missing for the JWT to flow through to PG?",
+    "routing": "engineering"
+  },
+  {
+    "id": "r017",
+    "subject": "Unrecognized charge of $487 on March invoice",
+    "body": "March invoice shows $487 in line items I don't recognize: 'API requests overage' $200, 'Premium support' $150, 'Storage upgrade' $137. We never enabled any of those. Can you investigate?",
+    "routing": "billing"
+  },
+  {
+    "id": "r018",
+    "subject": "How to cancel my subscription at the end of the billing cycle",
+    "body": "I want to cancel my Pro subscription but keep service through the rest of the cycle I already paid for. The dashboard's Cancel button warns about immediate cancellation — is there a no-immediate-cancel path?",
+    "routing": "billing"
+  },
+  {
+    "id": "r019",
+    "subject": "Refund request: charged twice for the same monthly invoice",
+    "body": "Both March 1 and March 3 show identical $79 charges on my card statement, same description. Confirmed with Stripe these are separate transactions. Please refund the duplicate.",
+    "routing": "billing"
+  },
+  {
+    "id": "r020",
+    "subject": "Upgrading from Pro to Team — how does prorating work mid-cycle?",
+    "body": "We started a new Pro cycle 6 days ago and want to upgrade to Team. Will the 24 unused Pro days credit toward the Team cost, or do we eat that and pay full Team starting today?",
+    "routing": "billing"
+  },
+  {
+    "id": "r021",
+    "subject": "Card declined when auto-renewing — service suspended",
+    "body": "Just got a service-suspended email. The card on file is still valid (verified with the bank). What's the retry policy and can I update the card and resume immediately without losing data?",
+    "routing": "billing"
+  },
+  {
+    "id": "r022",
+    "subject": "Need a W-9 / tax invoice with our company VAT for our records",
+    "body": "Our finance team needs an invoice with our company name, VAT number, and the standard tax fields for our quarterly accounting. The receipts in the dashboard don't include those. How do I generate a proper invoice?",
+    "routing": "billing"
+  },
+  {
+    "id": "r023",
+    "subject": "Switching from yearly to monthly billing — credit handling",
+    "body": "I'm 4 months into a yearly Pro plan and want to switch to monthly. What happens to the prepaid 8 remaining months — credit, refund, or forfeit? The plan-change flow doesn't say.",
+    "routing": "billing"
+  },
+  {
+    "id": "r024",
+    "subject": "Promo code didn't apply — was charged full price",
+    "body": "Used the SUMMER25 code at checkout but the invoice shows the full Pro price, no discount. The code was supposed to be 25% off the first 3 months. Can you apply the credit retroactively?",
+    "routing": "billing"
+  },
+  {
+    "id": "r025",
+    "subject": "Where can I find the docs for RLS policy syntax?",
+    "body": "Looking for the official documentation page that lists the RLS policy expressions and operators. I keep landing on blog posts but want the canonical reference.",
+    "routing": "general"
+  },
+  {
+    "id": "r026",
+    "subject": "Feature request: would love read-only API keys",
+    "body": "It would be useful to issue API keys scoped to read-only access for our analytics tooling. Currently we have to either use service_role (too broad) or anon (too narrow). Has this been considered?",
+    "routing": "general"
+  },
+  {
+    "id": "r027",
+    "subject": "How do I invite a new team member to my organization?",
+    "body": "I see Members in the dashboard but the Invite button isn't visible. Is there a permission level required to invite? What's the path to add a colleague?",
+    "routing": "general"
+  },
+  {
+    "id": "r028",
+    "subject": "Just wanted to say thanks — the new dashboard is great",
+    "body": "Loving the redesigned project dashboard. The performance graphs are much more readable and the navigation feels snappier. Pass the kudos to the team.",
+    "routing": "general"
+  },
+  {
+    "id": "r029",
+    "subject": "Can I rename my project after creation?",
+    "body": "Created a project with a placeholder name and now want to give it a real one. Don't see a rename option in the project settings. Is renaming supported and where would I find it?",
+    "routing": "general"
+  },
+  {
+    "id": "r030",
+    "subject": "Is there a Discord or community forum for users?",
+    "body": "Looking for a community where I can ask informal questions and see what other developers are building. Is there an official Discord, Slack, or forum?",
+    "routing": "general"
+  },
+  {
+    "id": "r031",
+    "subject": "When will Presence support land for Realtime?",
+    "body": "Saw it mentioned on the roadmap. Curious about the timeline — anything I can read about the design direction? Asking for a project we're scoping for next quarter.",
+    "routing": "general"
+  },
+  {
+    "id": "r032",
+    "subject": "Newsletter signup didn't trigger a confirmation email",
+    "body": "Signed up for the product newsletter via the marketing site form yesterday and never received a confirmation. Mostly checking it actually went through.",
+    "routing": "general"
+  }
+]

@@ -8,7 +8,8 @@
       "logs",
       "vendor",
       "supabase/functions",
-      "supabase/.temp"
+      "supabase/.temp",
+      "fixtures/embeddings.json"
     ]
   },
   "linter": {

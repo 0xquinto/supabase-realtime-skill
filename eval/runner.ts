@@ -15,6 +15,7 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import postgres from "postgres";
+import { boundedWatch, makeSupabaseAdapter } from "../src/server/realtime-client.ts";
 import { fetchProjectKeys } from "../tests/smoke/_helpers/project-keys.ts";
 import { ResilientApiClient } from "../tests/smoke/_helpers/resilient-api-client.ts";
 import { buildBranchPoolerUrl, withBranch } from "../vendor/foundation/branch.ts";
@@ -88,7 +89,20 @@ async function main(): Promise<void> {
     async ({ branch, details }) => {
       const dbUrl = buildBranchPoolerUrl({ ref: details.ref, db_pass: details.db_pass }, REGION);
 
-      // Apply migrations.
+      // Load pre-computed embeddings (built by `node eval/embed-corpus.mjs`).
+      // Map shape: { fixture_id: number[384] }.
+      const embeddings = JSON.parse(await readFile("fixtures/embeddings.json", "utf-8")) as Record<
+        string,
+        number[]
+      >;
+      const resolvedCorpus = JSON.parse(
+        await readFile("fixtures/resolved-corpus.json", "utf-8"),
+      ) as { id: string; subject: string; body: string; routing: string }[];
+
+      // Apply migrations + seed resolved-corpus tickets with embeddings.
+      // The corpus gives the triage agent's pgvector retrieval real
+      // semantic neighbors to retrieve from; without it, top-K retrieval
+      // would always be empty.
       const migration = await readFile(
         "supabase/migrations/20260430000001_support_tickets.sql",
         "utf-8",
@@ -96,6 +110,17 @@ async function main(): Promise<void> {
       const sql = postgres(dbUrl, { max: 1, prepare: false });
       try {
         await sql.unsafe(migration);
+        for (const item of resolvedCorpus) {
+          const emb = embeddings[item.id];
+          if (!emb) {
+            throw new Error(`embedding missing for resolved-corpus id ${item.id}`);
+          }
+          // halfvec literal accepted by pgvector via `[a,b,c]` text format.
+          await sql`
+            insert into support_tickets (customer_id, subject, body, status, routing, embedding)
+            values (gen_random_uuid(), ${item.subject}, ${item.body}, 'resolved', ${item.routing}, ${`[${emb.join(",")}]`})
+          `;
+        }
       } finally {
         await sql.end();
       }
@@ -107,13 +132,48 @@ async function main(): Promise<void> {
       const supabaseUrl = `https://${details.ref}.supabase.co`;
       const supabaseKey = keys.serviceRole;
 
+      // T7 warm-up: first watch on a freshly-published table has a ~5s
+      // window where INSERTs are dropped. Burn one throwaway watch+insert
+      // pair before measurement so f001 doesn't pay the warm-up tax.
+      const warmupAdapter = makeSupabaseAdapter("support_tickets", { supabaseUrl, supabaseKey });
+      try {
+        const warmupWatch = boundedWatch({
+          adapter: warmupAdapter,
+          table: "support_tickets",
+          predicate: { event: "INSERT" },
+          timeout_ms: 8_000,
+          max_events: 1,
+        });
+        const warmupSql = postgres(dbUrl, { max: 1, prepare: false });
+        try {
+          await new Promise((r) => setTimeout(r, 6_000));
+          await warmupSql`
+            insert into support_tickets (customer_id, subject, body)
+            values (gen_random_uuid(), '__warmup__', '__warmup__')
+          `;
+        } finally {
+          await warmupSql.end();
+        }
+        await warmupWatch;
+      } catch {
+        // Warm-up failures are non-fatal; the trial loop's own boundedWatch
+        // will surface real issues with telemetry.
+      }
+
       const results: TriageResult[] = [];
       for (const fixture of fixtures) {
+        const embedding = embeddings[fixture.id];
+        if (!embedding) {
+          throw new Error(
+            `embedding missing for fixture ${fixture.id} — re-run eval/embed-corpus.mjs`,
+          );
+        }
         const input: TriageInput = {
           fixture: {
             id: fixture.id,
             ticket: fixture.ticket,
             expected_routing: fixture.expected_routing,
+            embedding,
           },
           supabaseUrl,
           supabaseKey,
