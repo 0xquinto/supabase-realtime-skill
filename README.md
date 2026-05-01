@@ -43,7 +43,7 @@ The full narrative — what was tried, what failed, what landed, with the eval n
 
 Supabase's product direction in 2026 is *"agents running on Supabase, not just against."* Edge Functions, Automatic Embeddings, Agent Skills, MCP-on-Edge — all 2026 moves. The substrate to make agents react to Postgres CDC, with a shape that fits the Edge Function isolate model and respects RLS, didn't exist. This is that substrate.
 
-This isn't a kitchen-sink wrapper. It's five tools, two primitives, one worked example, four eval metrics — opinionated and tight, with the surface area documented in eight references.
+This isn't a kitchen-sink wrapper. It's five tools, two primitives, one worked example, four eval metrics — opinionated and tight, with the surface area documented in nine references.
 
 ## Quick start
 
@@ -139,7 +139,7 @@ Or via GitHub Actions (`workflow_dispatch`, requires the three secrets set on th
 gh workflow run ci-nightly.yml -R 0xquinto/supabase-realtime-skill
 ```
 
-The cron schedule was dropped (`477d6f5` → followup) — daily runs against a substrate that doesn't change daily are cost burn for no signal. Methodology evidence is the workflow file + the run-on-demand path, not a calendar trigger.
+The cron schedule was dropped (`b49a1fc`) — daily runs against a substrate that doesn't change daily are cost burn for no signal. Methodology evidence is the workflow file + the run-on-demand path, not a calendar trigger.
 
 Methodology: 4 metrics, binary scoring, Wilson 95% CIs, McNemar paired-test comparisons. No LLM-as-judge as a gate. See [`references/eval-methodology.md`](references/eval-methodology.md).
 
@@ -171,7 +171,7 @@ The pre-T31 recon (whether to file the upstream issue) lives in [`docs/upstream/
 - [`eval/`](eval/) — regression harness with pre-registered thresholds + synthesizer + triage agent
 - [`fixtures/`](fixtures/) — 20 hand-curated ci-fast seeds + 100 ci-nightly (20 seeds × 5 LLM-augmented variations)
 - [`docs/writeup.md`](docs/writeup.md) — the headline narrative
-- [`docs/decisions/`](docs/decisions/) — ADRs (0001-0004)
+- [`docs/decisions/`](docs/decisions/) — ADRs (see directory for the live index)
 - [`docs/upstream/`](docs/upstream/README.md) — recon + spec + plan that produced this repo
 - [`playbook/`](playbook/) — eval methodology backbone
 
@@ -179,7 +179,7 @@ The pre-T31 recon (whether to file the upstream issue) lives in [`docs/upstream/
 
 - Dual ESM + CJS publish via `tsup` with `.d.ts` and `.d.cts` declarations
 - npm publish via [OIDC Trusted Publisher](https://docs.npmjs.com/trusted-publishers/) (no `NPM_TOKEN` secret in CI; sigstore-signed provenance attestation on every release)
-- ci-fast (PR-blocking) + ci-nightly (cron) split — full CI in [`.github/workflows/`](.github/workflows/)
+- ci-fast (PR-blocking) + ci-nightly (manual `workflow_dispatch`) split — full CI in [`.github/workflows/`](.github/workflows/)
 - Strict TypeScript (`exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, `noExplicitAny`)
 
 ## License

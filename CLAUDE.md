@@ -26,6 +26,9 @@ bun run build                        # tsup → dist/{client,server}/index.{js,c
 bun run eval/spike-latency.ts        # n=20 latency check (Phase 1 gate)
 bun run eval/runner.ts ci-fast       # fixtures × triage × manifest gate (~$0.50, 5 min)
 bun run eval/runner.ts ci-nightly    # n=100 (~$2-3, 30 min)
+
+# Multi-model probe (default: claude-haiku-4-5):
+EVAL_TRIAGE_MODEL=claude-sonnet-4-6 bun run eval/runner.ts ci-nightly
 ```
 
 Operator setup: [`references/edge-deployment.md`](references/edge-deployment.md). Requires Supabase Pro + a dedicated host project + a fine-grained PAT.
@@ -44,8 +47,8 @@ Operator setup: [`references/edge-deployment.md`](references/edge-deployment.md)
 | `tests/smoke/_helpers/` | `ResilientApiClient`, `fetchProjectKeys` — reused by `eval/` |
 | `eval/` | spike-latency, triage-agent, metrics, runner, synthesize-fixtures |
 | `fixtures/ci-fast/` | 20 hand-curated tickets — the merge gate |
-| `fixtures/ci-nightly/` | 100 (20 seeds + 80 LLM-augmented; spot-checked) — currently empty pending T26 |
-| `references/` | 8 skill consumer reference pages (linked from SKILL.md) |
+| `fixtures/ci-nightly/` | 100 (20 seeds + 80 LLM-augmented; spot-checked) |
+| `references/` | 9 skill consumer reference pages (linked from SKILL.md) |
 | `supabase/functions/mcp/` | Edge Function entry (deploys; tool-routing pending) |
 | `supabase/migrations/` | support_tickets schema for the worked example |
 | `playbook/` | methodology — see `playbook/README.md` |
@@ -96,6 +99,18 @@ The `!` triggers on import — fails typecheck-driven imports, fails CI runs wit
 
 `vendor/foundation/` is a snapshot. **Don't edit it.** If a slice needs new behavior, write a test-local subclass (like `ResilientApiClient`) or open an ADR. Same policy as supabase-mcp-evals.
 
+### GH Actions: gate on secrets via step output, not job-level `if:`
+
+`secrets.X` is forbidden in job-level `if:` (security restriction). For workflows that should skip cleanly when eval secrets are absent, use a first step that writes `secrets=true|false` to `$GITHUB_OUTPUT`, then gate subsequent steps on `steps.have.outputs.secrets == 'true'`. Pattern lives in `.github/workflows/ci-nightly.yml` + `ci-fast.yml`'s eval job.
+
+### npm publish uses OIDC, not `NPM_TOKEN`
+
+`.github/workflows/publish.yml` declares `permissions: id-token: write` and runs `npm publish` with no `NODE_AUTH_TOKEN`. npm and GitHub do an OIDC handshake (Trusted Publisher, GA July 2025). Don't add an `NPM_TOKEN` repo secret. Requires Node ≥ 24 (for prebundled npm ≥ 11.5.1).
+
+### ADR status discipline
+
+Don't mark an ADR `Accepted` until the operator explicitly decides. `Proposed` is the safe default for design choices the operator hasn't ruled on. The pre-registration loop's whole point is that outcomes (accept / partial / reject) come from evidence + operator judgment, not from drafting momentum.
+
 ## Where to put new info
 
 | Kind | Lives in |
@@ -105,7 +120,7 @@ The `!` triggers on import — fails typecheck-driven imports, fails CI runs wit
 | Operational finding from a spike | append to `docs/spike-findings.md` |
 | Skill consumer reference | `references/<topic>.md` (linked from `SKILL.md`) |
 | External research closing a playbook gap | `playbook/research/<topic>.md` (mirror supabase-mcp-evals' pre-registered targets pattern) |
-| Architecture decision | `docs/decisions/NNNN-<slug>.md` (three ADRs filed: 0001 manifest pre-registration, 0002 f019 relabel, 0003 dual-path embedding) |
+| Architecture decision | `docs/decisions/NNNN-<slug>.md` (see directory for filed ADRs) |
 | Engineering tactics | commit messages |
 
 ## Anti-patterns (from `playbook/PLAYBOOK.md` § 8)
@@ -122,13 +137,12 @@ The `!` triggers on import — fails typecheck-driven imports, fails CI runs wit
 
 ## Status
 
-v0.1.x build complete. ci-nightly n=100 passes on rate AND CI low for action_correctness (94% / 0.875); only mechanical Wilson upper-CI bounds remain (n=300 in v2.0.0 manifest collapses them — see ADR-0001).
+v0.1.x shipped. Latest ci-nightly: **99/100 action_correctness, CI low 0.946** (Sonnet 4.6, ADR-0009); Haiku 4.5 hits 96/100 post-f019-relabel (ADR-0006). Manifest gate passes on rate AND CI low; mechanical Wilson upper-CI bounds remain until n=300 (v2.0.0 manifest, ADR-0007).
 
-**Done since `docs/ship-status.md` snapshot:** synthesizer fixtures (n=100 spot-checked, commit `d705b17`); ci-nightly run series (recency proxy → pgvector wiring → f019 relabel, latest `eval/reports/ci-nightly-1777601490246.json`); Edge Function transport wired (`StreamableHTTPServerTransport`, commit `2135168`) with in-process round-trip test; tsup migration ships `.d.ts`/`.d.cts` (commit `8ef463c`); spec deviation closed via dual-path embedding (commit `a9302d8`, ADR-0003).
+**Shipped:** npm package published as `supabase-realtime-skill` (`v0.1.0` + `v0.1.1` via OIDC Trusted Publisher); Edge Function deployed and live-verified (JSON-RPC `tools/list` round-trips); 9 ADRs filed exercising the pre-registration loop in all three outcomes (accept/partial/reject).
 
-**Operator follow-ups remaining:**
-1. Push to GitHub remote + tag `v0.1.0` → publish to npm (workflow ready; `NPM_TOKEN` secret needed)
-2. Live-deploy verify: `supabase functions deploy mcp` + curl JSON-RPC `tools/list` against deployed URL
-3. File issue on `supabase/agent-skills` (T31 has body draft; needs #1 first so URLs resolve)
+**CI:** `ci-fast` runs every push (typecheck + lint + 33 fast tests, ~1 min, free). `ci-nightly` is **manual-only** (`workflow_dispatch`) — daily cron was dropped on 2026-05-01 (~$60-90/mo of API spend reproducing identical numbers; methodology evidence is the workflow file + on-demand trigger).
 
-51+ commits on local `main`, no remote configured.
+**Operator follow-ups:**
+1. T31 — file issue on `supabase/agent-skills` (decide: as-drafted, reshape per ADR-0004, or skip).
+2. (Optional) Set `EVAL_*` repo secrets if scheduled `ci-nightly` is ever re-enabled.
