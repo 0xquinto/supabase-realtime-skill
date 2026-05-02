@@ -199,6 +199,17 @@ async function runTrial(
       `create table ${table} (id uuid primary key default gen_random_uuid(), n int)`,
     );
     tableCreated = true;
+
+    // Probe T7-Edge surfaced: postgres-changes events on this host project
+    // arrive with `new: {}` + `errors: ["Error 401: Unauthorized"]` unless
+    // the table has a permissive RLS policy + GRANT SELECT to the agent's
+    // role. Realtime broker authorizes the row payload separately from
+    // PostgREST. RLS-disabled-with-GRANT delivers zero events to anon JWTs;
+    // RLS-enabled-with-policy-using(true) is the consumer-shaped chain.
+    // See docs/spike-findings.md § T7-Edge sub-finding "GRANT + RLS chain".
+    await sql.unsafe(`alter table ${table} enable row level security`);
+    await sql.unsafe(`create policy "${table}_read" on ${table} for select using (true)`);
+    await sql.unsafe(`grant select on ${table} to anon, authenticated, service_role`);
     await sql.unsafe(`alter publication supabase_realtime add table ${table}`);
     publicationAdded = true;
 
@@ -264,23 +275,27 @@ async function runTrial(
     }
 
     if (result.closed_reason === "max_events" && result.events_returned >= 1) {
-      // Time-based bucketing: which INSERT did the response correspond to?
-      // The deployed Edge runtime returns `new: null` for postgres-changes
-      // events (replication-payload quirk), so we can't read INSERT.n from
-      // the payload. Wall-time bucketing works because INSERTs fire on a
-      // known schedule and the function returns immediately on first event.
-      // Threshold midpoints between schedule offsets.
-      const wall = result.wall_ms;
+      // With the GRANT + RLS chain in place, `new` is populated and we can
+      // read INSERT.n directly. Fall back to time-based bucketing if `new.n`
+      // is somehow absent (defensive — the chain change is what makes this
+      // reliable).
+      const deliveredN = payload.events?.[0]?.new?.n;
       let bucket: DeliveredOutcome;
-      if (wall < (INSERT_SCHEDULE_MS[0] + INSERT_SCHEDULE_MS[1]) / 2) {
-        bucket = "delivered_n0";
-        result.delivered_n = 0;
-      } else if (wall < (INSERT_SCHEDULE_MS[1] + INSERT_SCHEDULE_MS[2]) / 2) {
-        bucket = "delivered_n1";
-        result.delivered_n = 1;
+      if (typeof deliveredN === "number" && deliveredN >= 0 && deliveredN <= 2) {
+        result.delivered_n = deliveredN;
+        bucket = `delivered_n${deliveredN}` as DeliveredOutcome;
       } else {
-        bucket = "delivered_n2";
-        result.delivered_n = 2;
+        const wall = result.wall_ms;
+        if (wall < (INSERT_SCHEDULE_MS[0] + INSERT_SCHEDULE_MS[1]) / 2) {
+          bucket = "delivered_n0";
+          result.delivered_n = 0;
+        } else if (wall < (INSERT_SCHEDULE_MS[1] + INSERT_SCHEDULE_MS[2]) / 2) {
+          bucket = "delivered_n1";
+          result.delivered_n = 1;
+        } else {
+          bucket = "delivered_n2";
+          result.delivered_n = 2;
+        }
       }
       result.outcome = bucket;
     } else if (result.closed_reason === "timeout") {
@@ -320,10 +335,13 @@ async function main(): Promise<void> {
     `[spike-edge-warmup] trials: ${N_TRIALS}, insert schedule: [${INSERT_SCHEDULE_MS.map((o) => `+${o}ms`).join(", ")}]`,
   );
   console.log(
-    "[spike-edge-warmup] bearer: service_role (matches tests/smoke/watch-table.smoke.test.ts;",
+    "[spike-edge-warmup] bearer: service_role; tables created with RLS + policy + GRANT chain",
   );
   console.log(
-    "[spike-edge-warmup]   bypasses RLS so we measure substrate warm-up, not auth-filter latency)",
+    "[spike-edge-warmup]   (probe T7-Edge: GRANT alone delivers events but 401-strips row data;",
+  );
+  console.log(
+    "[spike-edge-warmup]   RLS-enabled-with-policy-using(true) is the consumer-shaped chain)",
   );
 
   const sql = postgres(HOST_DB_URL as string, { max: 1, prepare: false });

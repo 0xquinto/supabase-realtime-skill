@@ -209,28 +209,42 @@ First-pass spike used a single INSERT at +100ms post-call-dispatch. **17/20 tria
 
 Mitigation in the spike: multi-INSERT schedule (+100ms / +5s / +10s) — at least one INSERT is guaranteed to land post-SUBSCRIBED for typical Edge cold-start budgets. **The v1.0.0 watch_table Edge smoke MUST use the multi-INSERT schedule** (mirrors `tests/smoke/watch-table.smoke.test.ts:87-89`); single-shot INSERT designs will flake in consumer hands.
 
-### 2. `new` payload arrives as `null` in the deployed Edge runtime
+### 2. `new: {}` + 401 unless GRANT + RLS chain is applied (root-cause pinned)
 
-Every delivered event in the spike returned `{ event: "INSERT", table, schema: "public", new: null, old: null, commit_timestamp: null }`. The npm-side `WatchTableEventSchema` already allows `new: null` (`z.record(z.unknown()).nullable()`), so the schema is permissive — but production agents using `watch_table` through the deployed function will get *event metadata only*, not row data.
+First-pass spike output showed every delivered event with `new: null`. Diagnostic probe ([`eval/probe-edge-payload.ts`](../eval/probe-edge-payload.ts)) decomposed this:
 
-Why bucketing in the spike is time-based (not payload-based): spike originally tried `payload.events[0].new.n` to identify which INSERT was delivered; that's `null` on Edge so the spike fell back to wall-time bucketing (which works because INSERTs fire on a known schedule and the function returns immediately on first event).
+| Variant | Auth | Table setup | Result |
+|---|---|---|---|
+| C | service_role (legacy JWT) | bare `CREATE TABLE` | events=1, `new: {}`, `errors: ["Error 401: Unauthorized"]` |
+| D | service_role (legacy JWT) | `+ GRANT SELECT` | events=1, **`new: { id, body, n }`**, `errors: null` |
+| E | service_role (legacy JWT) | `+ GRANT + RLS policy using(true)` | events=1, **`new: { id, body, n }`**, `errors: null` |
+| F | anon (legacy JWT) | `+ GRANT SELECT` (no RLS) | **events=0** — no event delivery to anon at all |
+| G | anon (legacy JWT) | `+ GRANT + RLS policy using(true)` | events=1, **`new: { id, body, n }`**, `errors: null` |
+| (asym) | new `sb_secret_*` | bare | websocket protocol error 1002 (broker rejects upgrade) |
 
-**Likely cause:** REPLICA IDENTITY DEFAULT vs FULL on the spike's freshly-created tables (the spike does `create table ... primary key default gen_random_uuid()` without setting `replica identity full`). DEFAULT publishes only the changed columns + PK on UPDATE/DELETE, but for INSERT the WAL ought to carry the full row. Not yet verified — possible alternates: a Realtime broker config on the host project, or a deployed-supabase-js path that drops `new` when certain conditions aren't met.
+**Root cause:** the host project's Realtime broker authorizes the row payload separately from PostgREST. Without `GRANT SELECT` to the agent's role on the source table, the broker delivers the event metadata but replaces the row with `errors: ["Error 401: Unauthorized"]`. For service_role, GRANT alone is sufficient (RLS-bypass). For anon (the consumer contract), GRANT alone delivers zero events — RLS must be enabled with at least one permissive `select` policy for events to reach the channel at all. The new asymmetric `sb_secret_*` keys don't authenticate against the Realtime websocket handshake (separate finding; [supabase-js#2029](https://github.com/supabase/supabase-js/pull/2029)-shaped territory but distinct from the warm-up bug).
 
-**Action item:** worth a separate ADR or `references/replication-identity.md` revision once the cause is pinned. Doesn't block ADR-0016 (the smoke can assert event-count without inspecting `new`), but it's a substrate concern v1.0.x consumers will hit.
+**Why this wasn't caught earlier:** branches via `withBranch` get auto-grants on table creation (Supabase branch provisioning hook); `support_tickets` (used in ADR-0014's worked example) was created via migration which auto-grants; `tests/smoke/watch-table.smoke.test.ts` doesn't inspect `new` content so it silently passed. Direct `sql.unsafe(create table ...)` against the host project (the spike's shape) doesn't auto-grant — that's the gap.
 
-### 3. Anon-JWT failure mode is unverified
+**Consumer-facing implication:** the bounded-watch primitive depends on consumers having configured their tables with the RLS + GRANT chain that PostgREST + Realtime expect. This is the standard Supabase contract, but it's worth surfacing in `references/` because consumers driven through agents may not realize a table they "own" needs explicit GRANT to receive postgres-changes row data via Realtime when subscribed under anon JWT.
 
-First-pass spike used `keys.anon` and saw 4/4 timeout before being killed. Switching to `keys.serviceRole` and multi-INSERT gave 20/20 delivered. The auth variable was never re-tested in isolation, so it's unclear whether anon JWT against a fresh table (no RLS policies, RLS-disabled by default for `create table`) would succeed under the multi-INSERT schedule. The ADR-0015-shipped Edge smokes use anon for `tools/list`, `/health`, `describe_table_changes`, and public-channel `broadcast_to_channel` — none of which exercise the `realtime.messages` RLS path that `watch_table` traverses.
+**Spike fix:** [`eval/spike-edge-warmup.ts:198-217`](../eval/spike-edge-warmup.ts) now applies `enable row level security` + `create policy ... using (true)` + `grant select on ... to anon, authenticated, service_role` after `CREATE TABLE`. Re-run with the chain shows `new` populated and 12s wall-budget recommendation unchanged. Bucket distribution shifts: n0 ratio drops from 65% to 30% — the RLS evaluation adds ~100-200ms per event, pushing more trials past the warm-up threshold. p99 unchanged within margin (5322ms vs 5490ms first pass).
 
-**Action item:** the v1.0.0 watch_table Edge smoke (per ADR-0016) should test with the same JWT shape consumers will actually use. Recommended: smoke creates the temp table + a permissive RLS policy granting `select` to `anon`, mirroring what consumer-side migrations would do. Alternative: smoke uses service_role bearer for the spike's reasons, and a separate smoke validates the anon-JWT-with-RLS-policy path.
+**Smoke shape:** ADR-0016's watch_table Edge smoke must apply this chain on the temp table before subscribing, otherwise it'd silently pass on `events.length === 1` while the row data is 401-stripped. See "Methodology consequences" below.
+
+### 3. Anon-JWT path validated via probe (RLS-policy required)
+
+Probe variant G (anon JWT + GRANT + RLS-enabled + `select using(true)` policy) delivered 1/1 with populated `new`. Variant F (anon JWT + GRANT alone, RLS-disabled) delivered **zero events** — Realtime requires the policy gate to deliver postgres-changes events to anon at all. This pins the consumer contract: `watch_table` consumers using anon JWT need both RLS-enabled AND a permissive `select` policy on the source table.
+
+**Action item:** ADR-0016's smoke uses anon JWT (matches consumer contract); table setup applies the full RLS + policy + GRANT chain to mirror what consumer-side migrations produce. service_role-bearer smoke variant is unnecessary for v1.0.0 — the probe data is the validation receipt.
 
 ## Methodology consequences for ADR-0016
 
-1. **Smoke wall budget = 12s** — covers p99 + comfortable margin, well within the Edge isolate's 150s ceiling and the spec's 30s smoke-test tradition.
+1. **Smoke wall budget = 12s** — covers p99 + comfortable margin, well within the Edge isolate's 150s ceiling and the spec's 30s smoke-test tradition. Spike re-run with the GRANT+RLS chain confirms the recommendation unchanged.
 2. **Multi-INSERT schedule is mandatory** — single-shot INSERTs at +100ms will flake. Mirror `watch-table.smoke.test.ts:87-89` exactly.
-3. **Don't assert on `new`-payload contents** — schema permits null, deployed runtime returns null. Assert event count + `closed_reason: max_events` only.
-4. **Auth-shape in the smoke is an open ADR-0016 decision** — service_role (matches this spike) or anon-with-RLS-policy (matches consumer contract). Tilt: anon-with-RLS-policy, since the smoke's job is consumer-shaped reliability evidence; if that's flaky, that's the load-bearing finding.
+3. **Smoke MUST apply the GRANT + RLS chain** before subscribing. Sequence: `create table` → `replica identity full` (optional, only matters if smoke ever tests UPDATE/DELETE `old`) → `enable row level security` → `create policy ... using (true)` → `grant select on ... to anon, authenticated, service_role` → `alter publication supabase_realtime add table`. Without the chain, `events.length === 1` passes vacuously while `new: {}` carries 401.
+4. **Smoke asserts on populated `new`** — once the chain is in place, `payload.new` carries the row. The smoke should assert `event.new.body === <expected>` (or whatever sentinel column it inserts) to detect future regressions where the chain breaks.
+5. **Smoke uses anon JWT** — matches consumer contract; probe variant G is the validation receipt.
 
 ## What the spike does NOT prove
 
