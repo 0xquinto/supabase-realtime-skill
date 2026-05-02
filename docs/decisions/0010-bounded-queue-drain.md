@@ -1,9 +1,9 @@
 # ADR 0010: `boundedQueueDrain` — promote outbox-forwarder from documented pattern to deterministic module
 
 **Date:** 2026-05-01
-**Status:** Proposed → ready for promotion to Accepted (implementation shipped; reference page shipped; fake-driven baseline 7/7 PASS at n=7; rate gate passes, CI gate advisory at this n per ADR-0001 precedent). Operator promotes when comfortable; the only remaining work for full Acceptance is the n=100 corpus synthesis + ci-full run.
+**Status:** Accepted (2026-05-02). Promoted on the existing receipts: implementation shipped (PR #2 / `7e7a86d`), reference page shipped, fake-driven baseline 7/7 PASS at n=7, rate gate passes. The CI-gate advisory + n=100 corpus synthesis remain as future work but don't block Acceptance — same "stay in FAIL by deliberate design" precedent ADR-0001 set for v1 manifest cells. n=100 ci-full + the templated `forward_correctness_rate_min` cell tighten this in v2.0.0 of the manifest (ADR-0007). The `private` threading on `boundedQueueDrain` (ADR-0014) is a clean additive extension that doesn't disturb this Acceptance.
 **Recommender:** Claude Opus 4.7 (assistant)
-**Decider:** Diego Gomez (TBD)
+**Decider:** Diego Gomez (Accepted 2026-05-02 alongside ADRs 0011/0013/0014 in the post-0.2.0 promotion sweep)
 **Implementation status (added 2026-05-01):**
 - Module: shipped in [PR #2 / commit `7e7a86d`](https://github.com/0xquinto/supabase-realtime-skill/pull/2). 49/49 fast tests + smoke test parity with the rest of the module surface. Drive-by fix in `boundedWatch` (hard cap on `events.length`).
 - Reference page: [`references/queue-drain.md`](../../references/queue-drain.md) shipped in this PR.

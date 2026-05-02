@@ -1,6 +1,6 @@
 # ADR-0014: Worked-example ship — demo migration + npm `0.2.0` + manifest-cell deferral
 
-**Status:** Proposed (filed alongside the implementation it carries; ADR status discipline says don't promote to Accepted until the operator decides — see `CLAUDE.md` § "ADR status discipline").
+**Status:** Accepted (2026-05-02). Promoted same-day in the post-0.2.0 sweep alongside ADRs 0010 / 0011 / 0013. The implementation merged on PR #10 (`3dcdfe8`); README/SKILL.md currency on PR #11 (`3ed272e`); promotion sweep on PR #12 (this commit). Substrate-correctness re-verified post-merge against a real Pro branch on 2026-05-02 (branch `kizykjdatrwosyyzwgtm`, 78s wall time, all four assertions PASS — own_tenant_events=2 / cross_tenant_events=0 / own_broadcasts=1 / injection_broadcasts=0). Smoke test loaded the demo migration via the ADR-0014 refactored path (`sql.unsafe(migrationSql)` against `supabase/migrations/20260502000001_multi_tenant_audit_demo.sql`) — confirms the byte-equivalence claim in § "Implementation status." `boundedQueueDrain` `private` threading is exercised by 49/49 fast tests but not yet under smoke (no composed-primitive smoke test exists at v0.2.0 — future ADR can add).
 
 **Date:** 2026-05-02
 
