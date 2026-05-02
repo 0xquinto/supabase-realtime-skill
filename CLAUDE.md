@@ -164,7 +164,7 @@ The Supabase platform gateway returns 406 on `GET /functions/v1/mcp/health` if o
 
 ### Deno lock regen after `deno.json` changes
 
-When bumping any version in `supabase/functions/mcp/deno.json`: `cd supabase/functions/mcp && rm -f deno.lock && deno cache --reload index.ts && deno check index.ts`. Without this, the lock keeps the prior pin and the deployed bundle's resolution is ambiguous (the ADR-0015 anomaly trail).
+When bumping any version in `supabase/functions/mcp/deno.json`: `cd supabase/functions/mcp && rm -f deno.lock && deno cache --reload index.ts && deno check index.ts`. Without this, `deno.lock` and the deployed bundle can drift (source-tree-vs-deployed alignment was the ADR-0015 anomaly).
 
 ## Where to put new info
 
