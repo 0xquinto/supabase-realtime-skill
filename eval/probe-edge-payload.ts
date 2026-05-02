@@ -1,24 +1,25 @@
 // eval/probe-edge-payload.ts
 //
-// One-shot diagnostic: when watch_table is invoked through the deployed
-// Edge Function vs against the host project directly via supabase-js, do
-// the postgres_changes events carry `new` populated, or is `new: null`?
+// One-shot diagnostic: under what auth + table-config combination does
+// supabase-js postgres_changes deliver an INSERT event with `new`
+// populated, vs delivered with `new: null/empty`, vs not delivered at all?
 //
 // Spike T7-Edge surfaced `new: null` on every delivered event from the
-// deployed function. This probe narrows the cause:
-//   - Probe A: raw supabase-js → `postgres_changes` directly against host
-//     project. Two tables, replica identity DEFAULT vs FULL.
-//   - Probe B: same payload via the deployed Edge function (matches T7-Edge
-//     spike's wiring).
+// deployed function (using anon JWT against a freshly-created table).
+// This probe pins the cause by walking the auth × GRANT × RLS matrix
+// and recording which combination yields populated payloads.
 //
-// If Probe A shows `new` populated but Probe B doesn't → the bug is in the
-// deployed bundle's transport / per-request server lifecycle.
+// Variants:
+//   - C: service_role,  bare CREATE TABLE        (no GRANT, no RLS)
+//   - D: service_role,  + GRANT SELECT
+//   - E: service_role,  + GRANT SELECT + RLS policy
+//   - F: anon,          + GRANT SELECT (no RLS)
+//   - G: anon,          + GRANT SELECT + RLS policy   ← consumer contract
 //
-// If Probe A also shows `new: null` → it's substrate (Realtime broker, host
-// project tenant config, or supabase-js itself in the npm-published shape).
-//
-// If FULL populates and DEFAULT doesn't → unusual (INSERT events shouldn't
-// depend on replica identity), but it'd be a clean answer.
+// The asymmetric-key (sb_secret_*) variant is intentionally NOT in the
+// matrix: every previous run hit `WS protocol error 1002` at handshake,
+// which is a known Realtime-broker incompatibility unrelated to the
+// payload-shape question this probe answers. See spike-findings § T7-Edge.
 //
 // Run:
 //   set -a && source .env && set +a && bun run eval/probe-edge-payload.ts
@@ -59,8 +60,36 @@ interface ProbeRow {
 
 const ts = Date.now();
 const probes = [
-  // Final variant: GRANT SELECT under anon JWT (the consumer contract).
-  // If this populates `new`, the v1.0.0 smoke can use anon-with-GRANT directly.
+  // service_role baseline — sanity-check that payload populates without
+  // any table-side authorization at all (RLS bypass + no GRANT needed).
+  {
+    probe: "C_bare_service",
+    identity: "full",
+    auth: "legacy_service",
+    grant: false,
+    rls: false,
+  },
+  // service_role + GRANT — confirms GRANT alone doesn't change the
+  // service-role path (it's RLS-bypassed; this is a control).
+  {
+    probe: "D_granted_service",
+    identity: "full",
+    auth: "legacy_service",
+    grant: true,
+    rls: false,
+  },
+  // service_role + GRANT + RLS — control: RLS is bypassed by service_role,
+  // so behavior should match D.
+  {
+    probe: "E_granted_rls_service",
+    identity: "full",
+    auth: "legacy_service",
+    grant: true,
+    rls: true,
+  },
+  // anon + GRANT (no RLS) — Postgres allows the SELECT, but the Realtime
+  // broker's row-authorization checks still demand RLS-enabled-with-policy.
+  // Expect: events=0 (broker filters before delivery).
   {
     probe: "F_granted_anon",
     identity: "full",
@@ -68,6 +97,8 @@ const probes = [
     grant: true,
     rls: false,
   },
+  // anon + GRANT + RLS — the consumer contract. v1.0.0 watch_table smoke
+  // applies this exact chain. Expect: events=1, populated `new`.
   {
     probe: "G_granted_rls_anon",
     identity: "full",

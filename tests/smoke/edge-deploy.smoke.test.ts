@@ -293,7 +293,6 @@ describe.skipIf(!SHOULD_RUN)("Edge Function MCP transport (live deploy)", () => 
         const { status, body } = await callPromise;
         const wall = performance.now() - t0;
         for (const t of insertTimers) clearTimeout(t);
-        console.log(`[smoke] watch_table E2E wall=${wall.toFixed(0)}ms`);
 
         expect(status, `function returned HTTP ${status}`).toBe(200);
         expect(body.jsonrpc).toBe("2.0");
@@ -324,6 +323,14 @@ describe.skipIf(!SHOULD_RUN)("Edge Function MCP transport (live deploy)", () => 
         expect(event?.new, "new payload empty/null — likely GRANT+RLS chain broken").toBeTruthy();
         expect(typeof event?.new?.n).toBe("number");
         expect([0, 1, 2]).toContain(event?.new?.n);
+        // Log the delivered n alongside wall time. The schedule hands us
+        // n=0 (+100ms), n=1 (+5s), or n=2 (+10s); n=0 is the steady-state
+        // happy path. If n=2 starts being habitual on cold-start runs,
+        // the warm-up window has likely widened and the budget needs a
+        // fresh spike. (Substrate drift visibility — ADR-0016 step 2.)
+        console.log(
+          `[smoke] watch_table E2E wall=${wall.toFixed(0)}ms delivered_n=${event?.new?.n}`,
+        );
       } finally {
         for (const t of insertTimers) clearTimeout(t);
         if (publicationAdded) {
