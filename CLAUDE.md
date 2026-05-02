@@ -49,11 +49,11 @@ Operator setup: [`references/edge-deployment.md`](references/edge-deployment.md)
 | `fixtures/ci-fast/` | 20 hand-curated tickets — the merge gate |
 | `fixtures/ci-full/` | 100 (20 seeds + 80 LLM-augmented; spot-checked) |
 | `references/` | 11 skill consumer reference pages (linked from SKILL.md) |
-| `supabase/functions/mcp/` | Edge Function entry (deploys; tool-routing pending) |
+| `supabase/functions/mcp/` | Edge Function entry (deploys + live-verified end-to-end on all 5 tools — ADR-0015 + ADR-0016) |
 | `supabase/migrations/` | support_tickets schema for the worked example |
 | `playbook/` | methodology — see `playbook/README.md` |
 | `docs/upstream/` | spec + plan + recon snapshot — see `docs/upstream/README.md` |
-| `docs/decisions/` | 13 ADRs (0001-0013); follow `NNNN-<slug>.md` pattern |
+| `docs/decisions/` | 16 ADRs (0001-0016); follow `NNNN-<slug>.md` pattern |
 | `docs/handoff-YYYY-MM-DD.md` | end-of-session snapshots; latest carries open scope for next session |
 | `docs/recon/` | pre-ADR research docs (`YYYY-MM-DD-<topic>-recon.md`); produces evidence the ADR commits on |
 | `docs/spike-findings.md` | T7 5s warm-up + T8 .ts-extension reshape + Phase 1 gate-PASSED trail |
@@ -134,6 +134,19 @@ Substrate-correctness fixes ship with smoke-test receipts on real Pro branches. 
 
 When a private-channel broadcast send is denied by `realtime.messages` INSERT policy, the substrate does NOT throw. REST returns 202 (request accepted), the row is filtered out by RLS, no fan-out, sender's `httpSend()` resolves successfully. Receiver simply never sees the message. **Tenant isolation is enforced; failure-mode signaling to the caller is not.** If you need an explicit "broadcast was authorized" signal, layer your own ack on top. Documented in `references/multi-tenant-rls.md` § "Failure mode".
 
+### Postgres-Changes row payload requires GRANT + RLS chain (anon-JWT silent strip)
+
+For `watch_table` consumers using anon JWT, Realtime broker authorizes the row payload separately from PostgREST. Without the full chain, events are delivered with `new: {}` + `errors: ["Error 401: Unauthorized"]` — `events.length === 1` passes, but row data is stripped. The chain after `create table`:
+
+```sql
+alter table <t> enable row level security;
+create policy "<t>_read" on <t> for select using (true);
+grant select on <t> to anon, authenticated, service_role;
+alter publication supabase_realtime add table <t>;
+```
+
+Notes: GRANT alone (RLS-disabled) delivers zero events to anon — RLS must be enabled with at least one permissive `select` policy. service_role bypasses RLS so GRANT alone suffices for service_role-bearer flows. Branches via `withBranch` get auto-grants on table creation, which is why `tests/smoke/watch-table.smoke.test.ts` doesn't apply the chain explicitly. Direct `sql.unsafe(create table ...)` against the host project (the spike + the new Edge `watch_table` smoke) does NOT auto-grant. Pinned via 7-variant probe in `eval/probe-edge-payload.ts`; documented in `docs/spike-findings.md` § T7-Edge sub-finding 2; sized smoke wall budget in ADR-0016.
+
 ### Loading `.env` for smoke / eval scripts
 
 Bun doesn't auto-source `.env` into `process.env` for `vitest run` invocations. Pattern: `set -a && source .env && set +a && bun run vitest run <path>`. Without this, smoke tests skip silently (`SHOULD_RUN=false`) instead of running.
@@ -192,14 +205,14 @@ When bumping any version in `supabase/functions/mcp/deno.json`: `cd supabase/fun
 
 ## Status
 
-v0.1.x shipped. Latest ci-full: **99/100 action_correctness, CI low 0.946** (Sonnet 4.6, ADR-0009); Haiku 4.5 hits 96/100 post-f019-relabel (ADR-0006). Manifest gate passes on rate AND CI low; mechanical Wilson upper-CI bounds remain until n=300 (v2.0.0 manifest, ADR-0007).
+v0.2.0 shipped (worked-example bundle, ADR-0014). Latest ci-full: **99/100 action_correctness, CI low 0.946** (Sonnet 4.6, ADR-0009); Haiku 4.5 hits 96/100 post-f019-relabel (ADR-0006). Manifest gate passes on rate AND CI low; mechanical Wilson upper-CI bounds remain until n=300 (v2.0.0 manifest, ADR-0007).
 
-**Shipped:** npm package published as `supabase-realtime-skill` (`v0.1.0` + `v0.1.1` via OIDC Trusted Publisher); Edge Function deployed and live-verified (JSON-RPC `tools/list` round-trips); 13 ADRs filed exercising the pre-registration loop in five outcome shapes: accept (0001/0002/0003/0005/0009), partial-accept (0006/0007), reject (0008), proposed-deferral (0004/0010/0012), predicted-and-confirmed-and-fixed (0011), predicted-and-empirically-refined (0013).
+**Shipped:** npm package published as `supabase-realtime-skill` (`v0.1.0` + `v0.1.1` + `v0.2.0` via OIDC Trusted Publisher); Edge Function deployed and live-verified end-to-end on all 5 tools (JSON-RPC `tools/list` + `tools/call` for `describe_table_changes`, `broadcast_to_channel`, `watch_table`, `subscribe_to_channel`; ADR-0015 + ADR-0016); 16 ADRs filed exercising the pre-registration loop in six outcome shapes: accept (0001/0002/0003/0005/0009/0010/0011/0013/0014/0015), partial-accept (0006/0007), reject (0008), proposed-deferral (0004/0012), proposed-pending-receipts (0016), predicted-and-empirically-refined (0013/0015).
 
 **CI:** `ci-fast` runs every push (typecheck + lint + 49 fast tests, ~1 min, free). `ci-full` is **manual-only** (`workflow_dispatch`) — daily cron was dropped on 2026-05-01 (~$60-90/mo of API spend reproducing identical numbers; methodology evidence is the workflow file + on-demand trigger). The tier was renamed from `ci-nightly` → `ci-full` on 2026-05-01 to stop the name from claiming a schedule it doesn't have; same workflow, same fixtures, just an honest label.
 
 **Operator follow-ups:**
 1. T31 — file issue on `supabase/agent-skills` (decide: as-drafted, reshape per ADR-0004, or skip).
-2. (Optional) Set `EVAL_*` repo secrets if `ci-full` is invoked on demand.
-3. Promote ADRs 0010, 0011, 0013 from `Proposed` → `Accepted` when comfortable. All three have FAIL/PASS or n=7 receipts on real Pro branches; only operator decision remains. ADR-0012 stays `Proposed` until ADR-0014 ships (it's a deferral — no receipts to promote on yet).
-4. ADR-0014 (worked-example ship: demo migration + npm `0.2.0` + optional `cross_tenant_leakage_rate_max` manifest cell) is the next natural ship. See `docs/handoff-2026-05-02.md` § "What's actually next".
+2. (Optional) Set `EVAL_*` repo secrets if `ci-full` is invoked on demand. New: `EVAL_HOST_DB_URL` for the Edge `watch_table` smoke (`tests/smoke/edge-deploy.smoke.test.ts`) — host project's pooler URL. Skips cleanly if absent.
+3. Promote ADR-0016 from `Proposed` → `Accepted` when comfortable. 6/6 PASS receipts on the live Edge deploy (10.8s + 19.0s wall) plus the 20-trial spike with populated `new` content; only operator decision remains.
+4. **Manifest v2.0.0 / n=300** is the next natural ship — ADR-0017 (or ADR-0007 amendment) when the corpus expansion lands. v1.0.0 tag is gated on this + the smoke surface PR (#18) shipping in the same calendar week per [`recon`](docs/recon/2026-05-02-v1.0.0-ship-surface-recon.md) Decision 4. If manifest blocks, smoke PR ships as `0.3.0` standalone and v1.0.0 stays unclaimed.
