@@ -146,6 +146,26 @@ Bun doesn't auto-source `.env` into `process.env` for `vitest run` invocations. 
 
 Below this, `ch.httpSend()` doesn't exist (added 2.75.0, Oct 2025) and the empty-`Authorization`-header REST bug (supabase-js#1937) bites. ADR-0013 pinned the floor; don't relax it without an ADR.
 
+### Supabase CLI deploy auth env var
+
+The Supabase CLI reads `SUPABASE_ACCESS_TOKEN`, not `EVAL_SUPABASE_PAT` (which is what `.env` and the smoke-test harness use). For `supabase functions deploy`, prefix the env: `SUPABASE_ACCESS_TOKEN=$EVAL_SUPABASE_PAT supabase functions deploy --no-verify-jwt mcp --project-ref $EVAL_HOST_PROJECT_REF`. Sourcing `.env` alone is necessary but not sufficient.
+
+### Direct pushes to `main` are blocked
+
+The session harness denies `git push` to `main` — every change ships through a PR, even tiny doc-only follow-ups (CLAUDE.md currency sweeps, handoff docs). Pattern: branch off, commit locally, push the branch, open the PR, merge with `gh pr merge --squash --delete-branch`. Don't try to amend-and-force-push to main as a shortcut.
+
+### Host project's `public` schema is empty by default
+
+The host project (`EVAL_HOST_PROJECT_REF`) doesn't auto-apply `supabase/migrations/`. Smoke tests that run against the host project (not via `withBranch`) must be schema-independent — assert against guaranteed-not-there ghost tables (`__realtime_skill_smoke_${Date.now()}__` pattern in `tests/smoke/edge-deploy.smoke.test.ts`) or create + drop a temp table inline. Don't assume `support_tickets` exists.
+
+### Edge Function `/health` curl needs both `Authorization` AND `apikey` headers
+
+The Supabase platform gateway returns 406 on `GET /functions/v1/mcp/health` if only `Authorization` is set, because the MCP transport advertises `text/event-stream` by default and the gateway negotiates content type via `apikey`. Pattern documented in `tests/smoke/edge-deploy.smoke.test.ts:108-114` and `references/edge-deployment.md` § Smoke test.
+
+### Deno lock regen after `deno.json` changes
+
+When bumping any version in `supabase/functions/mcp/deno.json`: `cd supabase/functions/mcp && rm -f deno.lock && deno cache --reload index.ts && deno check index.ts`. Without this, the lock keeps the prior pin and the deployed bundle's resolution is ambiguous (the ADR-0015 anomaly trail).
+
 ## Where to put new info
 
 | Kind | Lives in |
