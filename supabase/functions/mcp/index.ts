@@ -9,10 +9,11 @@
 // matching the bounded-subscription tool-call shape.
 
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { makeServer } from "../../../src/server/server.ts";
+import { makeServer } from "supabase-realtime-skill/server";
 
-// After npm publish, swap the makeServer import to:
-// import { makeServer } from "npm:supabase-realtime-skill@latest/dist/server.js";
+// supabase-realtime-skill is resolved via the deno.json import map to
+// npm:supabase-realtime-skill@^0.2.0. The function consumes the same
+// published artifact npm consumers install — no source-tree drift.
 
 // SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_DB_URL are auto-injected by
 // the Edge Functions runtime — they're "reserved" only in the sense that
