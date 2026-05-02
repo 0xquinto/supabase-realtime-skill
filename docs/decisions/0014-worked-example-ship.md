@@ -6,7 +6,7 @@
 
 **Supersedes:** none. **Composes on top of:** ADR-0011 (Postgres-Changes RLS substrate fix), ADR-0012 (substrate-vs-composition split rationale), ADR-0013 (Broadcast Authorization substrate fix).
 
-**Related recon:** [`docs/recon/2026-05-02-worked-example-ship-recon.md`](../recon/2026-05-02-worked-example-ship-recon.md). The recon's six explicit decisions are commited on below.
+**Related recon:** [`docs/recon/2026-05-02-worked-example-ship-recon.md`](../recon/2026-05-02-worked-example-ship-recon.md). The recon's six explicit decisions are committed on below.
 
 ## Context
 

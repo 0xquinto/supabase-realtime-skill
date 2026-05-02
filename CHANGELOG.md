@@ -43,7 +43,7 @@ Patch. Internal cleanup; no consumer-visible changes.
 
 ## [0.1.0] — 2026-05-01
 
-Initial release. Five MCP tools (`watch_table`, `broadcast_to_channel`, `subscribe_to_channel`, `list_channels`, `describe_table`) + `boundedQueueDrain` deterministic module + bundled eval harness (n=100 ci-full at 99/100 action_correctness on Sonnet 4.6). Edge Function deployed via OIDC Trusted Publisher. ADRs 0001–0010.
+Initial release. Five MCP tools (`watch_table`, `broadcast_to_channel`, `subscribe_to_channel`, `list_channels`, `describe_table_changes`) + `boundedQueueDrain` deterministic module + bundled eval harness (n=100 ci-full at 99/100 action_correctness on Sonnet 4.6). Edge Function deployed via OIDC Trusted Publisher. ADRs 0001–0010.
 
 [0.2.0]: https://github.com/0xquinto/supabase-realtime-skill/releases/tag/v0.2.0
 [0.1.1]: https://github.com/0xquinto/supabase-realtime-skill/releases/tag/v0.1.1
