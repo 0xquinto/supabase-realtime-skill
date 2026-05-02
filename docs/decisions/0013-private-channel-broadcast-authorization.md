@@ -1,9 +1,9 @@
 # ADR 0013: private-channel substrate API — close the Broadcast Authorization opt-in gap
 
 **Date:** 2026-05-02
-**Status:** Proposed → ready for promotion to Accepted (smoke test FAIL→fix→PASS receipts captured against real Supabase Pro branches; substrate gap confirmed and closed; recon's predicted effects validated against running infrastructure, with one prediction empirically refined). Operator promotes when comfortable.
+**Status:** Accepted (2026-05-02). FAIL→fix→PASS smoke receipts captured at filing (PR #8 / `fa7e86f`); re-verified post-ADR-0014 demo-migration refactor on 2026-05-02 (branch `kizykjdatrwosyyzwgtm`, own_broadcasts=1 / injection_broadcasts=0 / b_injection_threw=false — Layer 2 silent-filtering contract holds; A receives own authorized broadcast, B's cross-tenant injection silently filtered by `realtime.messages` INSERT policy). The empirically-refined prediction (Q3: substrate uses silent filtering, not loud rejection) is now the canonical reading documented in `references/multi-tenant-rls.md`.
 **Recommender:** Claude Opus 4.7 (assistant)
-**Decider:** Diego Gomez (TBD)
+**Decider:** Diego Gomez (Accepted 2026-05-02 in the post-0.2.0 promotion sweep)
 **Implementation status (added 2026-05-02):**
 - Smoke test: extended in this PR — [`tests/smoke/multi-tenant-rls.smoke.test.ts`](../../tests/smoke/multi-tenant-rls.smoke.test.ts) layer 2 assertions (c) + (d).
 - Substrate fix: shipped in this PR — `private?: boolean` added to [`src/types/schemas.ts`](../../src/types/schemas.ts) (BroadcastInputSchema + SubscribeChannelInputSchema) and the advertised `inputSchema` JSON in [`src/server/server.ts`](../../src/server/server.ts); threaded through [`src/server/subscribe.ts`](../../src/server/subscribe.ts) → [`boundedSubscribe`](../../src/server/realtime-client.ts) → [`makeSupabaseBroadcastAdapter`](../../src/server/realtime-client.ts) at channel construction; threaded through [`server.ts`](../../src/server/server.ts) `broadcast_to_channel` handler at channel construction.

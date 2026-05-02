@@ -1,9 +1,9 @@
 # ADR 0011: multi-tenant RLS baseline — close the JWT-`setAuth` gap on Realtime
 
 **Date:** 2026-05-01
-**Status:** Proposed → ready for promotion to Accepted (smoke test FAIL→fix→PASS receipts captured against real Supabase Pro branches; bug confirmed and fixed; recon's load-bearing prediction validated against running infrastructure). Operator promotes when comfortable; the only remaining work for full Acceptance is the worked-example follow-up branch (ADR-0012).
+**Status:** Accepted (2026-05-02). FAIL→fix→PASS smoke receipts captured against real Pro branches at filing (PR #5 / `f8b4894`); re-verified post-ADR-0014 demo-migration refactor on 2026-05-02 (branch `kizykjdatrwosyyzwgtm`, 78s wall time, own_tenant_events=2 / cross_tenant_events=0 — Layer 1 contract holds under the new `sql.unsafe(migrationSql)` setup path). The worked-example follow-up branch is now ADR-0014 (Accepted same day).
 **Recommender:** Claude Opus 4.7 (assistant)
-**Decider:** Diego Gomez (TBD)
+**Decider:** Diego Gomez (Accepted 2026-05-02 in the post-0.2.0 promotion sweep)
 **Implementation status (added 2026-05-01):**
 - Smoke test: shipped in this PR — [`tests/smoke/multi-tenant-rls.smoke.test.ts`](../../tests/smoke/multi-tenant-rls.smoke.test.ts).
 - `setAuth` fix: shipped in this PR — three call sites in [`src/server/realtime-client.ts`](../../src/server/realtime-client.ts) (lines 90-104, 282-289) + [`src/server/server.ts`](../../src/server/server.ts) (lines 119-132).
