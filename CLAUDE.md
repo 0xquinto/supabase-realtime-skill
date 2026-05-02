@@ -17,7 +17,7 @@ bun install
 cp .env.example .env                 # populate ANTHROPIC_API_KEY, EVAL_SUPABASE_PAT, EVAL_HOST_PROJECT_REF
 
 bun run test:fast                    # 49 offline tests (~1s)
-bun run test:smoke                   # 5 online smoke tests against real branches (~3 min, requires env)
+bun run test:smoke                   # 8 online smoke tests against real branches (~3-6 min, requires env)
 bun run typecheck                    # tsc --noEmit
 bun run lint                         # biome check
 bun run lint:fix                     # biome check --write
@@ -48,11 +48,14 @@ Operator setup: [`references/edge-deployment.md`](references/edge-deployment.md)
 | `eval/` | spike-latency, triage-agent, metrics, runner, synthesize-fixtures |
 | `fixtures/ci-fast/` | 20 hand-curated tickets — the merge gate |
 | `fixtures/ci-full/` | 100 (20 seeds + 80 LLM-augmented; spot-checked) |
-| `references/` | 9 skill consumer reference pages (linked from SKILL.md) |
+| `references/` | 11 skill consumer reference pages (linked from SKILL.md) |
 | `supabase/functions/mcp/` | Edge Function entry (deploys; tool-routing pending) |
 | `supabase/migrations/` | support_tickets schema for the worked example |
 | `playbook/` | methodology — see `playbook/README.md` |
 | `docs/upstream/` | spec + plan + recon snapshot — see `docs/upstream/README.md` |
+| `docs/decisions/` | 13 ADRs (0001-0013); follow `NNNN-<slug>.md` pattern |
+| `docs/handoff-YYYY-MM-DD.md` | end-of-session snapshots; latest carries open scope for next session |
+| `docs/recon/` | pre-ADR research docs (`YYYY-MM-DD-<topic>-recon.md`); produces evidence the ADR commits on |
 | `docs/spike-findings.md` | T7 5s warm-up + T8 .ts-extension reshape + Phase 1 gate-PASSED trail |
 | `docs/writeup.md` | the headline narrative |
 | `docs/ship-status.md` | what's done + 5 follow-ups awaiting operator action |
@@ -171,10 +174,12 @@ Below this, `ch.httpSend()` doesn't exist (added 2.75.0, Oct 2025) and the empty
 
 v0.1.x shipped. Latest ci-full: **99/100 action_correctness, CI low 0.946** (Sonnet 4.6, ADR-0009); Haiku 4.5 hits 96/100 post-f019-relabel (ADR-0006). Manifest gate passes on rate AND CI low; mechanical Wilson upper-CI bounds remain until n=300 (v2.0.0 manifest, ADR-0007).
 
-**Shipped:** npm package published as `supabase-realtime-skill` (`v0.1.0` + `v0.1.1` via OIDC Trusted Publisher); Edge Function deployed and live-verified (JSON-RPC `tools/list` round-trips); 9 ADRs filed exercising the pre-registration loop in all three outcomes (accept/partial/reject).
+**Shipped:** npm package published as `supabase-realtime-skill` (`v0.1.0` + `v0.1.1` via OIDC Trusted Publisher); Edge Function deployed and live-verified (JSON-RPC `tools/list` round-trips); 13 ADRs filed exercising the pre-registration loop in five outcome shapes: accept (0001/0002/0003/0005/0009), partial-accept (0006/0007), reject (0008), proposed-deferral (0004/0010/0012), predicted-and-confirmed-and-fixed (0011), predicted-and-empirically-refined (0013).
 
 **CI:** `ci-fast` runs every push (typecheck + lint + 49 fast tests, ~1 min, free). `ci-full` is **manual-only** (`workflow_dispatch`) — daily cron was dropped on 2026-05-01 (~$60-90/mo of API spend reproducing identical numbers; methodology evidence is the workflow file + on-demand trigger). The tier was renamed from `ci-nightly` → `ci-full` on 2026-05-01 to stop the name from claiming a schedule it doesn't have; same workflow, same fixtures, just an honest label.
 
 **Operator follow-ups:**
 1. T31 — file issue on `supabase/agent-skills` (decide: as-drafted, reshape per ADR-0004, or skip).
 2. (Optional) Set `EVAL_*` repo secrets if `ci-full` is invoked on demand.
+3. Promote ADRs 0010, 0011, 0013 from `Proposed` → `Accepted` when comfortable. All three have FAIL/PASS or n=7 receipts on real Pro branches; only operator decision remains. ADR-0012 stays `Proposed` until ADR-0014 ships (it's a deferral — no receipts to promote on yet).
+4. ADR-0014 (worked-example ship: demo migration + npm `0.2.0` + optional `cross_tenant_leakage_rate_max` manifest cell) is the next natural ship. See `docs/handoff-2026-05-02.md` § "What's actually next".
