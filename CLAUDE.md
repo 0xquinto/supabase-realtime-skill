@@ -111,6 +111,38 @@ The `!` triggers on import — fails typecheck-driven imports, fails CI runs wit
 
 Don't mark an ADR `Accepted` until the operator explicitly decides. `Proposed` is the safe default for design choices the operator hasn't ruled on. The pre-registration loop's whole point is that outcomes (accept / partial / reject) come from evidence + operator judgment, not from drafting momentum.
 
+### Branch + commit conventions
+
+Branch names use a functional prefix: `recon/<topic>`, `fix/<topic>`, `feat/<topic>`, `docs/<topic>`. **Don't** use `adr-NNNN-<topic>` — the ADR number lives in the commit/PR title, not the branch name.
+
+### FAIL→fix→PASS smoke-test discipline (substrate-correctness ships)
+
+Substrate-correctness ADRs (ADR-0011, ADR-0013 pattern) follow a strict sequence: (1) write smoke test extension against current code; (2) run, capture **FAIL** receipt with concrete numbers; (3) land the substrate fix; (4) re-run, capture **PASS** receipt. Same test code both runs — only production source changes between them. Skipping (2) makes the fix faith-based; the receipts are what move the ADR from `Proposed` to ready-for-Accepted.
+
+### Substrate-vs-composition split (ADR-0012 § 2)
+
+Substrate-correctness fixes ship with smoke-test receipts on real Pro branches. Fixture-driven manifest gates ship with worked examples. **Don't roll the latter into the former** — fake-driven evals against substrate-only changes are weak signal (proxy gap). When in doubt, defer the manifest cell and ship the substrate fix narrow.
+
+### `httpSend()` runtime contract ≠ `.d.ts` declaration
+
+`RealtimeChannel.httpSend()`'s declared return type is `Promise<{success: true} | {success: false; status; error}>`, but the runtime (`RealtimeChannel.js:411-448`) only resolves `{success: true}` on HTTP 202 — every other status calls `Promise.reject(new Error(errorMessage))`. The discriminated `success: false` branch is unreachable. Wrappers must be `try/catch`-shaped, never `if (!result.success)`-shaped. See `makeProductionBroadcastSender` in `src/server/server.ts` for the pattern.
+
+### `realtime.messages` RLS denial is silent
+
+When a private-channel broadcast send is denied by `realtime.messages` INSERT policy, the substrate does NOT throw. REST returns 202 (request accepted), the row is filtered out by RLS, no fan-out, sender's `httpSend()` resolves successfully. Receiver simply never sees the message. **Tenant isolation is enforced; failure-mode signaling to the caller is not.** If you need an explicit "broadcast was authorized" signal, layer your own ack on top. Documented in `references/multi-tenant-rls.md` § "Failure mode".
+
+### Loading `.env` for smoke / eval scripts
+
+Bun doesn't auto-source `.env` into `process.env` for `vitest run` invocations. Pattern: `set -a && source .env && set +a && bun run vitest run <path>`. Without this, smoke tests skip silently (`SHOULD_RUN=false`) instead of running.
+
+### `SupabaseClient` generic mismatch under `exactOptionalPropertyTypes`
+
+`createClient(url, key, opts)` infers `SupabaseClient<any, "public", "public", any, any>`; module boundaries that accept the bare `SupabaseClient` type don't unify under `exactOptionalPropertyTypes: true`. Cast to bare `SupabaseClient` (no generic) at the boundary — pattern lives in `tests/smoke/multi-tenant-rls.smoke.test.ts`.
+
+### `@supabase/supabase-js` floor is `^2.88.0` (Dec 2025)
+
+Below this, `ch.httpSend()` doesn't exist (added 2.75.0, Oct 2025) and the empty-`Authorization`-header REST bug (supabase-js#1937) bites. ADR-0013 pinned the floor; don't relax it without an ADR.
+
 ## Where to put new info
 
 | Kind | Lives in |
