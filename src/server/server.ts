@@ -12,14 +12,55 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import postgres from "postgres";
 import { ToolError } from "../types/errors.ts";
-import { handleBroadcast } from "./broadcast.ts";
+import { type BroadcastSender, handleBroadcast } from "./broadcast.ts";
 import { type TableIntrospection, handleDescribeTable } from "./describe-table.ts";
 import { type ChannelRegistryEntry, handleListChannels } from "./list-channels.ts";
 import { makeSupabaseAdapter, makeSupabaseBroadcastAdapter } from "./realtime-client.ts";
 import { handleSubscribe } from "./subscribe.ts";
 import { handleWatchTable } from "./watch-table.ts";
+
+/**
+ * Build a BroadcastSender that uses ch.httpSend (explicit REST-side
+ * broadcast send, added supabase-js@050687a 2025-10-08). Threads the
+ * `input.private` flag at channel construction so realtime.messages
+ * RLS is enforced when the caller opts in.
+ *
+ * Failure mode: ch.httpSend rejects with Error on non-202 (the .d.ts
+ * discriminated `success: false` branch is unreachable at runtime per
+ * RealtimeChannel.js:441-447). handleBroadcast's 3-retry envelope
+ * catches and translates to ToolError("UPSTREAM_ERROR"). RLS denials
+ * are silent — REST returns 202, row is filtered out, no fan-out, no
+ * thrown error. See references/multi-tenant-rls.md § "Failure mode".
+ *
+ * Exported so smoke tests exercise the same code path as production
+ * (closes the mirror-vs-real gap; a typo here would surface in tests).
+ */
+export function makeProductionBroadcastSender(
+  client: SupabaseClient,
+  registry: ChannelRegistryEntry[],
+): BroadcastSender {
+  return {
+    send: async (input) => {
+      const ch = input.private
+        ? client.channel(input.channel, { config: { private: true } })
+        : client.channel(input.channel);
+      try {
+        await ch.httpSend(input.event, input.payload, { timeout: 10_000 });
+      } finally {
+        await client.removeChannel(ch);
+      }
+      registry.push({
+        name: input.channel,
+        member_count: 1,
+        last_event_at: new Date().toISOString(),
+      });
+      return { status: "ok" };
+    },
+  };
+}
 
 export interface ServerConfig {
   supabaseUrl: string;
@@ -160,32 +201,7 @@ export function makeServer(cfg: ServerConfig): Server {
           break;
         case "broadcast_to_channel": {
           result = await handleBroadcast(req.params.arguments, {
-            sender: {
-              // httpSend (added supabase-js@050687a, Oct 2025) is the
-              // explicit REST-side broadcast send. Saves the SUBSCRIBED
-              // handshake roundtrip vs the deprecated implicit-fallback
-              // ch.send(). Failure mode: rejects with Error on non-202;
-              // the discriminated `success: false` branch in the .d.ts
-              // is unreachable at runtime (RealtimeChannel.js:441-447) —
-              // we wrap-and-translate to ToolError("UPSTREAM_ERROR") so
-              // handleBroadcast's retry envelope sees a thrown failure.
-              send: async (input) => {
-                const ch = input.private
-                  ? supabaseClient.channel(input.channel, { config: { private: true } })
-                  : supabaseClient.channel(input.channel);
-                try {
-                  await ch.httpSend(input.event, input.payload, { timeout: 10_000 });
-                } finally {
-                  await supabaseClient.removeChannel(ch);
-                }
-                channelRegistry.push({
-                  name: input.channel,
-                  member_count: 1,
-                  last_event_at: new Date().toISOString(),
-                });
-                return { status: "ok" };
-              },
-            },
+            sender: makeProductionBroadcastSender(supabaseClient, channelRegistry),
           });
           break;
         }

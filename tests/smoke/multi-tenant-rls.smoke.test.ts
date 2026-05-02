@@ -32,7 +32,7 @@
 // after branch is up. Skips when EVAL_SUPABASE_PAT / EVAL_HOST_PROJECT_REF
 // missing.
 
-import { createClient } from "@supabase/supabase-js";
+import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
 import { type BroadcastSender, handleBroadcast } from "../../src/server/broadcast.ts";
@@ -42,6 +42,7 @@ import {
   makeSupabaseAdapter,
   makeSupabaseBroadcastAdapter,
 } from "../../src/server/realtime-client.ts";
+import { makeProductionBroadcastSender } from "../../src/server/server.ts";
 import { buildBranchPoolerUrl, withBranch } from "../../vendor/foundation/branch.ts";
 import { fetchProjectKeys } from "./_helpers/project-keys.ts";
 import { ResilientApiClient } from "./_helpers/resilient-api-client.ts";
@@ -52,7 +53,7 @@ const REGION = process.env.EVAL_REGION ?? "us-east-1";
 const SHOULD_RUN = !!(PAT && HOST_REF);
 
 describe.skipIf(!SHOULD_RUN)("multi-tenant RLS smoke (real branch, two tenants)", () => {
-  it("layer 1 (Postgres-Changes RLS): tenant A's JWT sees own-tenant events and not cross-tenant events", async () => {
+  it("layers 1+2 (Postgres-Changes + Broadcast Authorization RLS): tenant A's JWT sees own-tenant events; cross-tenant inserts blocked; cross-tenant broadcast injection rejected", async () => {
     const client = new ResilientApiClient({
       pat: PAT as string,
       hostProjectRef: HOST_REF as string,
@@ -382,33 +383,33 @@ describe.skipIf(!SHOULD_RUN)("multi-tenant RLS smoke (real branch, two tenants)"
           // production server.ts shape, parameterized by JWT. Pre-fix:
           // public channel, send goes through. Post-fix: private channel,
           // send goes through (A is a member). Both runs: A receives.
-          // Sender factory: mirrors the production server.ts shape but
-          // parameterized by JWT. Uses httpSend (post-ADR-0013) so the
-          // sender exercises the same REST-side path the production
-          // handler uses, threading the `private` flag at channel
-          // construction time.
-          const buildSender = (jwt: string): BroadcastSender => {
-            return {
-              send: async (input) => {
-                const senderClient = createClient(supabaseUrl, anon, {
-                  auth: { persistSession: false, autoRefreshToken: false },
-                });
-                senderClient.realtime.setAuth(jwt);
-                const ch = input.private
-                  ? senderClient.channel(input.channel, { config: { private: true } })
-                  : senderClient.channel(input.channel);
-                try {
-                  await ch.httpSend(input.event, input.payload, { timeout: 10_000 });
-                } finally {
-                  await senderClient.removeChannel(ch);
-                }
-                return { status: "ok" };
-              },
-            };
+          // Per-JWT clients + production sender factory. Each JWT gets
+          // its own supabase client because realtime.setAuth is per-
+          // client; production deploys would have one client per
+          // request/isolate (the JWT propagation question ADR-0011
+          // settled). Tracking these so we can disconnect at the end —
+          // important: don't cargo-cult this per-call createClient
+          // pattern into production code; production uses the long-
+          // lived supabaseClient in src/server/server.ts.
+          const sessionClients: SupabaseClient[] = [];
+          const buildSenderForJwt = (jwt: string): BroadcastSender => {
+            // Cast through SupabaseClient (no generic) — supabase-js'
+            // createClient overload infers a parameterized schema type
+            // that differs from the factory's generic-less signature
+            // under exactOptionalPropertyTypes.
+            const sessionClient = createClient(supabaseUrl, anon, {
+              auth: { persistSession: false, autoRefreshToken: false },
+            }) as SupabaseClient;
+            sessionClient.realtime.setAuth(jwt);
+            sessionClients.push(sessionClient);
+            // Use the SAME factory the production handler uses — closes
+            // the mirror-vs-real gap a typo in server.ts's threading
+            // would otherwise hide.
+            return makeProductionBroadcastSender(sessionClient, []);
           };
 
-          const senderA = buildSender(jwtA);
-          const senderB = buildSender(jwtB);
+          const senderA = buildSenderForJwt(jwtA);
+          const senderB = buildSenderForJwt(jwtB);
 
           // A's authorized send: should be received by A's listener.
           await handleBroadcast(
@@ -469,6 +470,13 @@ describe.skipIf(!SHOULD_RUN)("multi-tenant RLS smoke (real branch, two tenants)"
           // INSERT policy on realtime.messages, B's send throws, nothing
           // delivered to A).
           expect(injectionBroadcasts).toHaveLength(0);
+
+          // Tear down per-JWT websocket sessions so the test doesn't
+          // leak open connections. boundedSubscribe + senders own their
+          // channels; only the supabase clients themselves need closing.
+          for (const c of sessionClients) {
+            await c.realtime.disconnect();
+          }
         } finally {
           await sql.end();
         }

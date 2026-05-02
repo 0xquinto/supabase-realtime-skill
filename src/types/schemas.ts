@@ -50,7 +50,7 @@ export const BroadcastInputSchema = z.object({
   // Opt-in to Realtime Broadcast Authorization. When true, the substrate
   // constructs the channel with `private: true`, which gates send via
   // realtime.messages RLS. Default false preserves v0.1.x behavior.
-  private: z.boolean().optional(),
+  private: z.boolean().default(false),
 });
 export type BroadcastInput = z.infer<typeof BroadcastInputSchema>;
 
@@ -65,7 +65,7 @@ export const SubscribeChannelInputSchema = z.object({
   // Opt-in to Realtime Broadcast Authorization. When true, subscribe is
   // gated by realtime.messages RLS at SUBSCRIBED-handshake time.
   // Default false preserves v0.1.x behavior.
-  private: z.boolean().optional(),
+  private: z.boolean().default(false),
 });
 export type SubscribeChannelInput = z.infer<typeof SubscribeChannelInputSchema>;
 
