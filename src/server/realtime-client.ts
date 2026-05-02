@@ -219,6 +219,7 @@ export interface BroadcastAdapter {
   subscribe(opts: {
     channel: string;
     event_filter?: string;
+    private?: boolean;
     onBroadcast: (b: BroadcastReceived) => void;
   }): Promise<void>;
   unsubscribe(): Promise<void>;
@@ -228,6 +229,7 @@ export async function boundedSubscribe(input: {
   adapter: BroadcastAdapter;
   channel: string;
   event_filter?: string;
+  private?: boolean;
   timeout_ms: number;
   max_events: number;
 }): Promise<{ broadcasts: BroadcastReceived[]; closed_reason: "max_events" | "timeout" }> {
@@ -241,6 +243,7 @@ export async function boundedSubscribe(input: {
   await input.adapter.subscribe({
     channel: input.channel,
     ...(input.event_filter !== undefined ? { event_filter: input.event_filter } : {}),
+    ...(input.private !== undefined ? { private: input.private } : {}),
     onBroadcast: (b) => {
       if (input.event_filter && b.event !== input.event_filter) return;
       broadcasts.push(b);
@@ -293,8 +296,10 @@ export function makeSupabaseBroadcastAdapter(cfg: SupabaseAdapterConfig): Broadc
   let channel: RealtimeChannel | null = null;
 
   return {
-    async subscribe({ channel: name, onBroadcast }) {
-      channel = client.channel(name);
+    async subscribe({ channel: name, private: isPrivate, onBroadcast }) {
+      channel = isPrivate
+        ? client.channel(name, { config: { private: true } })
+        : client.channel(name);
       channel.on(
         REALTIME_LISTEN_TYPES.BROADCAST,
         { event: "*" },

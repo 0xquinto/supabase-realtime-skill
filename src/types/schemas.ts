@@ -47,6 +47,10 @@ export const BroadcastInputSchema = z.object({
     .refine((v) => new TextEncoder().encode(JSON.stringify(v)).byteLength <= PAYLOAD_BYTE_CAP, {
       message: "payload exceeds 32KB byte cap",
     }),
+  // Opt-in to Realtime Broadcast Authorization. When true, the substrate
+  // constructs the channel with `private: true`, which gates send via
+  // realtime.messages RLS. Default false preserves v0.1.x behavior.
+  private: z.boolean().default(false),
 });
 export type BroadcastInput = z.infer<typeof BroadcastInputSchema>;
 
@@ -58,6 +62,10 @@ export const SubscribeChannelInputSchema = z.object({
   event_filter: z.string().min(1).optional(),
   timeout_ms: z.number().int().min(1_000).max(120_000).default(60_000),
   max_events: z.number().int().min(1).max(200).default(50),
+  // Opt-in to Realtime Broadcast Authorization. When true, subscribe is
+  // gated by realtime.messages RLS at SUBSCRIBED-handshake time.
+  // Default false preserves v0.1.x behavior.
+  private: z.boolean().default(false),
 });
 export type SubscribeChannelInput = z.infer<typeof SubscribeChannelInputSchema>;
 

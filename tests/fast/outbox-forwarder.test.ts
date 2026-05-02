@@ -100,21 +100,28 @@ describe("outbox-forwarder pattern", () => {
       );
     }
 
+    // BroadcastInputSchema's `private` field defaults to false (ADR-0013);
+    // zod populates it on every parsed input, so the sender sees it on
+    // every send. Asserting `private: false` here makes the additive
+    // schema change visible in the regression contract.
     expect(sent).toEqual([
       {
         channel: "slack:eng-alerts",
         event: "deploy.started",
         payload: { service: "api", sha: "abc123" },
+        private: false,
       },
       {
         channel: "agent:billing-handoff",
         event: "invoice.failed",
         payload: { invoice_id: "inv-99" },
+        private: false,
       },
       {
         channel: "webhook:audit-sink",
         event: "user.role_changed",
         payload: { user_id: "u-7", from: "viewer", to: "editor" },
+        private: false,
       },
     ]);
   });

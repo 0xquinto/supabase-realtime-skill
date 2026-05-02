@@ -96,7 +96,23 @@ Two patterns worth calling out:
 
 ## Channel topology under tenant isolation
 
-For Broadcast Authorization, channel naming + RLS policies on `realtime.messages` work together:
+For Broadcast Authorization, channel naming + RLS policies on `realtime.messages` work together. **Two prerequisites** the substrate enforces:
+
+1. **Caller passes `private: true`** in the `broadcast_to_channel` / `subscribe_to_channel` MCP input. Without it, channels default to public and `realtime.messages` RLS is bypassed entirely — cross-tenant injection succeeds. ADR-0013 added the opt-in flag; v0.1.x users explicitly set it on the worked example.
+2. **`realtime.messages` policies match the topic shape** below. The RLS policy reads `realtime.topic()` (the channel name being subscribed/sent to) and matches it against the JWT identity's tenant memberships.
+
+```ts
+// Caller-side (Edge Function, agent, etc.):
+await handleBroadcast(
+  {
+    channel: `tenant:${organizationId}:audit-feed`,
+    event: "deploy.completed",
+    payload: { actor: userId, env: "production" },
+    private: true,  // ← opts in to realtime.messages RLS gating
+  },
+  { sender: yourSenderImpl },
+);
+```
 
 ```sql
 -- Allow members to subscribe to / send to broadcasts on their tenant's channel
@@ -127,22 +143,23 @@ create policy "tenant members can send tenant broadcasts"
 
 Channel names embed the tenant id (`tenant:abc123:audit-feed`) and the policy enforces that the subscriber's memberships include that exact tenant. **The channel name is the load-bearing identifier — get it wrong on the client and the policy denies the subscribe.**
 
-For the agent-side (in your Edge Function or backend code):
-
-```ts
-import { handleBroadcast } from "supabase-realtime-skill/server";
-
-await handleBroadcast(
-  {
-    channel: `tenant:${organizationId}:audit-feed`,
-    event: "deploy.completed",
-    payload: { actor: userId, env: "production" },
-  },
-  { sender: yourSenderImpl },
-);
-```
-
 The substrate doesn't enforce tenant scoping on channel names — that's the consumer's job. A composition-side eval gating consumer routing correctness (`cross_tenant_leakage_rate_max` candidate cell) is *deferred per [ADR-0012 § 2](../docs/decisions/0012-multi-tenant-audit-log-example.md)* — the substrate-side falsifiable receipt is the smoke test cited below; a fake-driven composition eval is in the ADR's roadmap, not yet shipped.
+
+### Failure mode: silent filtering, not loud rejection
+
+When `realtime.messages` RLS denies a broadcast send, the substrate does NOT throw. The REST endpoint returns 202 (request accepted), but the row is filtered out by the INSERT policy and never inserted into `realtime.messages` — so no message fans out to subscribers. From the caller's perspective, `httpSend()` resolves successfully; the message just never arrives at any listener.
+
+ADR-0013's smoke test confirms this empirically (`b_injection_threw=false, injection_broadcasts=0`). The recon predicted REST 403; the actual contract is REST 202 + RLS-dropped row. The tenant-isolation contract still holds — listeners receive zero leaked messages — but operators expecting a thrown error on policy violation will be surprised. **If you need an explicit "broadcast was authorized" signal, layer your own ack on top** (e.g., have the receiver echo back a confirmation broadcast).
+
+This applies to subscribe-side too: if the subscribe-time SELECT policy denies, the substrate-level `subscribe()` callback transitions to `CHANNEL_ERROR` rather than returning silently. So **subscribe failures are loud; send failures are silent.** The asymmetry is the substrate's, not the skill's.
+
+### `httpSend()` vs the deprecated implicit fallback
+
+ADR-0013 migrated `broadcast_to_channel` from the implicit `ch.send({ type: "broadcast", ... })` REST-fallback path to the explicit [`ch.httpSend(event, payload, opts)`](https://supabase.com/docs/reference/javascript/subscribe) (added 2025-10-08 in [supabase-js@050687a](https://github.com/supabase/supabase-js/commit/050687a816a5d1d77fa544c91b3944c4b9f0cae5)). Three reasons:
+
+1. **No SUBSCRIBED handshake** — `httpSend` hits the REST endpoint directly, saving one websocket roundtrip vs the old `subscribe()` → `send()` → `removeChannel()` flow.
+2. **Deprecation warning silenced** — current supabase-js logs `Realtime send() is automatically falling back to REST API. This behavior will be deprecated in the future. Please use httpSend() explicitly for REST delivery.` on every implicit-fallback send. ADR-0013 closes that.
+3. **Failure mode is rejection** — `httpSend()` rejects (throws) on non-202 responses (`RealtimeChannel.js:441-447`). The `.d.ts` discriminated `{ success: false; status; error }` branch is unreachable at runtime; `handleBroadcast`'s 3-retry envelope wraps the rejection and surfaces as `ToolError("UPSTREAM_ERROR")` after exhausting retries. Combined with the silent-filtering note above, this means the ONLY way the caller sees a thrown error is on transport-level failures (network, 5xx, timeout) — not on RLS denial.
 
 ## Scale shape: where Postgres-Changes hits its ceiling
 
@@ -225,7 +242,10 @@ The smoke test [`tests/smoke/multi-tenant-rls.smoke.test.ts`](../tests/smoke/mul
 - The `audit_events` table with RLS policies above
 - Two real JWTs (via `signInWithPassword`)
 
-Then it subscribes as user A under their JWT, fires three own-tenant + two cross-tenant inserts, and asserts (a) own-tenant events arrive, (b) cross-tenant events are blocked. The receipt lives in [ADR-0011](../docs/decisions/0011-multi-tenant-rls-baseline.md).
+Then it asserts **two layers**:
+
+- **Layer 1 (Postgres-Changes RLS)** — subscribe as user A under their JWT, fire three own-tenant + two cross-tenant inserts, assert (a) own-tenant events arrive, (b) cross-tenant events are blocked. Receipt: [ADR-0011](../docs/decisions/0011-multi-tenant-rls-baseline.md).
+- **Layer 2 (Broadcast Authorization RLS)** — same branch, same users. A subscribes to `tenant:${tenantA}:audit-feed` as a private channel, broadcasts under their JWT (received), B attempts cross-tenant injection on the same channel under their JWT (rejected silently by `realtime.messages` INSERT policy). Receipt: [ADR-0013](../docs/decisions/0013-private-channel-broadcast-authorization.md).
 
 A composition-side eval (consumer code keeping tenant isolation across batches, mixed-tenant events, adversarial `read_row` shapes) is named in the roadmap but not yet shipped — see [ADR-0012 § 2](../docs/decisions/0012-multi-tenant-audit-log-example.md) for the deferral rationale and [the recon](../docs/recon/2026-05-01-multi-tenant-worked-example-recon.md) § "Falsifiable predicted effect" for the proposed fixture shape.
 
@@ -234,6 +254,7 @@ A composition-side eval (consumer code keeping tenant isolation across batches, 
 - [`references/rls-implications.md`](rls-implications.md) — the high-level summary; this page is the deep dive
 - [`references/edge-deployment.md`](edge-deployment.md) — operator setup that this page assumes
 - [`references/queue-drain.md`](queue-drain.md) — the bounded primitive composition; layers cleanly with multi-tenant when channel names embed `tenant_id`
-- [ADR-0011](../docs/decisions/0011-multi-tenant-rls-baseline.md) — the `setAuth` fix that closed the original gap
+- [ADR-0011](../docs/decisions/0011-multi-tenant-rls-baseline.md) — the `setAuth` fix that closed the Postgres-Changes RLS gap
 - [ADR-0012](../docs/decisions/0012-multi-tenant-audit-log-example.md) — this page's design context + the eval that gates the composition
+- [ADR-0013](../docs/decisions/0013-private-channel-broadcast-authorization.md) — `private: true` opt-in + `httpSend()` migration that activated the Broadcast Authorization RLS layer
 - [Supabase — Realtime Authorization](https://supabase.com/docs/guides/realtime/authorization) — the primary docs for Broadcast Authorization

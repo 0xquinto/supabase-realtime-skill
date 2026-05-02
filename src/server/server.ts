@@ -12,14 +12,55 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import postgres from "postgres";
 import { ToolError } from "../types/errors.ts";
-import { handleBroadcast } from "./broadcast.ts";
+import { type BroadcastSender, handleBroadcast } from "./broadcast.ts";
 import { type TableIntrospection, handleDescribeTable } from "./describe-table.ts";
 import { type ChannelRegistryEntry, handleListChannels } from "./list-channels.ts";
 import { makeSupabaseAdapter, makeSupabaseBroadcastAdapter } from "./realtime-client.ts";
 import { handleSubscribe } from "./subscribe.ts";
 import { handleWatchTable } from "./watch-table.ts";
+
+/**
+ * Build a BroadcastSender that uses ch.httpSend (explicit REST-side
+ * broadcast send, added supabase-js@050687a 2025-10-08). Threads the
+ * `input.private` flag at channel construction so realtime.messages
+ * RLS is enforced when the caller opts in.
+ *
+ * Failure mode: ch.httpSend rejects with Error on non-202 (the .d.ts
+ * discriminated `success: false` branch is unreachable at runtime per
+ * RealtimeChannel.js:441-447). handleBroadcast's 3-retry envelope
+ * catches and translates to ToolError("UPSTREAM_ERROR"). RLS denials
+ * are silent — REST returns 202, row is filtered out, no fan-out, no
+ * thrown error. See references/multi-tenant-rls.md § "Failure mode".
+ *
+ * Exported so smoke tests exercise the same code path as production
+ * (closes the mirror-vs-real gap; a typo here would surface in tests).
+ */
+export function makeProductionBroadcastSender(
+  client: SupabaseClient,
+  registry: ChannelRegistryEntry[],
+): BroadcastSender {
+  return {
+    send: async (input) => {
+      const ch = input.private
+        ? client.channel(input.channel, { config: { private: true } })
+        : client.channel(input.channel);
+      try {
+        await ch.httpSend(input.event, input.payload, { timeout: 10_000 });
+      } finally {
+        await client.removeChannel(ch);
+      }
+      registry.push({
+        name: input.channel,
+        member_count: 1,
+        last_event_at: new Date().toISOString(),
+      });
+      return { status: "ok" };
+    },
+  };
+}
 
 export interface ServerConfig {
   supabaseUrl: string;
@@ -62,13 +103,18 @@ const TOOL_DEFS = [
   {
     name: "broadcast_to_channel",
     description:
-      "Fire-and-forget broadcast on a Realtime channel. Server retries 5xx idempotently up to 3 times.",
+      "Fire-and-forget broadcast on a Realtime channel. Server retries 5xx idempotently up to 3 times. Set `private: true` to opt in to Broadcast Authorization (gated by realtime.messages RLS); requires the agent's JWT to pass the channel's INSERT policy.",
     inputSchema: {
       type: "object",
       properties: {
         channel: { type: "string" },
         event: { type: "string" },
         payload: { type: "object" },
+        private: {
+          type: "boolean",
+          description:
+            "Opt-in to Realtime Broadcast Authorization (private channel). Defaults to false for v0.1.x backward compatibility.",
+        },
       },
       required: ["channel", "event", "payload"],
     },
@@ -76,7 +122,7 @@ const TOOL_DEFS = [
   {
     name: "subscribe_to_channel",
     description:
-      "Bounded subscription to a Realtime broadcast channel. Mirrors watch_table's bounded shape.",
+      "Bounded subscription to a Realtime broadcast channel. Mirrors watch_table's bounded shape. Set `private: true` to opt in to Broadcast Authorization (subscribe gated by realtime.messages RLS).",
     inputSchema: {
       type: "object",
       properties: {
@@ -84,6 +130,11 @@ const TOOL_DEFS = [
         event_filter: { type: "string" },
         timeout_ms: { type: "number", minimum: 1000, maximum: 120000, default: 60000 },
         max_events: { type: "number", minimum: 1, maximum: 200, default: 50 },
+        private: {
+          type: "boolean",
+          description:
+            "Opt-in to Realtime Broadcast Authorization (private channel). Defaults to false for v0.1.x backward compatibility.",
+        },
       },
       required: ["channel"],
     },
@@ -150,31 +201,7 @@ export function makeServer(cfg: ServerConfig): Server {
           break;
         case "broadcast_to_channel": {
           result = await handleBroadcast(req.params.arguments, {
-            sender: {
-              send: async (input) => {
-                const ch = supabaseClient.channel(input.channel);
-                await new Promise<void>((resolve, reject) => {
-                  const t = setTimeout(() => reject(new Error("subscribe timeout")), 10_000);
-                  ch.subscribe((s) => {
-                    if (s === "SUBSCRIBED") {
-                      clearTimeout(t);
-                      resolve();
-                    } else if (s === "CHANNEL_ERROR" || s === "TIMED_OUT") {
-                      clearTimeout(t);
-                      reject(new Error(`subscribe failed: ${s}`));
-                    }
-                  });
-                });
-                await ch.send({ type: "broadcast", event: input.event, payload: input.payload });
-                await supabaseClient.removeChannel(ch);
-                channelRegistry.push({
-                  name: input.channel,
-                  member_count: 1,
-                  last_event_at: new Date().toISOString(),
-                });
-                return { status: "ok" };
-              },
-            },
+            sender: makeProductionBroadcastSender(supabaseClient, channelRegistry),
           });
           break;
         }
