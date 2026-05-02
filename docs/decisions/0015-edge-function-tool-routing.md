@@ -1,6 +1,6 @@
 # ADR-0015: Edge Function tool-routing — verification coverage + source-tree-vs-deployed alignment
 
-**Status:** Proposed (2026-05-02). Implementation drafted on `feat/edge-function-tool-routing`. The deno.json bump + smoke extension + reference refresh ship in this PR; promotion to Accepted gates on the post-deploy PASS receipt against the redeployed function with `--no-verify-jwt`.
+**Status:** Accepted (2026-05-02). Promoted same-day in-PR after the operator ran `supabase functions deploy --no-verify-jwt mcp --project-ref uetkiogzuwhzshczaajr` from `feat/edge-function-tool-routing` (Edge Runtime v1.73.13, 3.447MB bundle). Post-fix smoke against the redeployed function: 4/4 PASS, 6.88s wall — receipt below in § "Implementation status." Reviewer-flagged nits (currency drift in `references/edge-deployment.md` § Deploy + § Smoke test, ADR provenance tightening) applied in commit `347f470`.
 
 **Date:** 2026-05-02
 
@@ -131,7 +131,7 @@ Properties:
 - 4/4 PASS, 7.67s wall. Receipt captured 2026-05-02. See § "Empirical refinement" for the anomaly the receipt surfaced.
 
 **Post-fix smoke receipt:**
-- Pending operator redeploy. Once `supabase functions deploy --no-verify-jwt mcp --project-ref <ref>` lands with the bumped deno.json + npm-import-swap source, re-run the smoke. Expected: 4/4 PASS, with the deployed bundle's supabase-js version now matching `deno.lock`.
+- 4/4 PASS, 6.88s wall. Captured 2026-05-02 against project `uetkiogzuwhzshczaajr` after `supabase functions deploy --no-verify-jwt mcp` from `feat/edge-function-tool-routing@347f470`. Edge Runtime v1.73.13, 3.447MB bundle. The deployed bundle's supabase-js version now matches `deno.lock` (`2.105.1` with `realtime-js@2.105.1` carrying `httpSend` + the #1937 empty-Authorization fix). The empirical anomaly from § "Empirical refinement" is *resolved*: deployed version is now known and the smoke gates the floor going forward.
 
 **Out of scope:**
 - Extending smoke to `watch_table` (requires publication + INSERT during the smoke window — adds 30-60s wall time). Future ADR.
