@@ -98,13 +98,23 @@ const result = await boundedQueueDrain({
 
 Categories partition the events array — `forwarded + dead_lettered + failed === events.length`. Full reference: [`references/queue-drain.md`](references/queue-drain.md). Filed against ADR-0010 (Proposed): [`docs/decisions/0010-bounded-queue-drain.md`](docs/decisions/0010-bounded-queue-drain.md).
 
-**Don't** use this when ordering across destinations matters (Realtime broadcast is fire-and-forget; per-destination FIFO needs a different shape) or when subscribers can't be made idempotent (run a consumer-side inbox table — out of scope for v0.2.0).
+**Don't** use this when ordering across destinations matters (Realtime broadcast is fire-and-forget; per-destination FIFO needs a different shape) or when subscribers can't be made idempotent (run a consumer-side inbox table — out of scope for the current release; revisit if a real consumer flags it).
+
+For multi-tenant deployments, pass `private: true` to gate the broadcast leg with `realtime.messages` RLS — see § "Worked example: multi-tenant audit log" below.
 
 ## Worked example: support-ticket triage
 
 A SaaS app has a `support_tickets` table. Tickets get auto-embedded via Supabase Automatic Embeddings (writes a `halfvec(1536)` to `embedding`). The triage agent watches for new tickets, retrieves the most-similar past resolved tickets via pgvector, decides routing, writes the routing back, and broadcasts a `ticket-routed` event so a downstream handoff agent picks it up.
 
-End-to-end walkthrough with code in `references/worked-example.md`.
+End-to-end walkthrough with code in `references/worked-example.md`. Schema ships at [`supabase/migrations/20260430000001_support_tickets.sql`](supabase/migrations/20260430000001_support_tickets.sql); this is the eval harness's SUT.
+
+## Worked example: multi-tenant audit log
+
+A B2B SaaS app has tenant-scoped audit events; users belong to one or more tenants via a `memberships` junction table. An agent operating under a forwarded user JWT watches `audit_events` (Postgres-Changes RLS — table policy admits only the user's own tenants) and broadcasts notable events to `tenant:<id>:audit-feed` private channels (Broadcast Authorization RLS — `realtime.messages` policies enforce membership at subscribe + send). Cross-tenant leakage is prevented at the substrate, not in agent code.
+
+Apply with `supabase db push`; the migration carries `memberships` + `audit_events` + the `public.user_tenant_ids()` SECURITY DEFINER STABLE helper + two `realtime.messages` RLS policies. Schema ships at [`supabase/migrations/20260502000001_multi_tenant_audit_demo.sql`](supabase/migrations/20260502000001_multi_tenant_audit_demo.sql); operator deep dive at [`references/multi-tenant-rls.md`](references/multi-tenant-rls.md). The smoke test [`tests/smoke/multi-tenant-rls.smoke.test.ts`](tests/smoke/multi-tenant-rls.smoke.test.ts) loads the same migration as setup, so the demo and the regression gate are byte-equivalent.
+
+Substrate-correctness for this example is filed across ADRs 0011 (JWT-`setAuth` on the Realtime websocket leg) + 0013 (`private: true` opt-in on Broadcast Authorization) + 0014 (the worked-example ship + `boundedQueueDrain` `private` threading).
 
 ## References
 
