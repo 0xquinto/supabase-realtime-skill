@@ -1,0 +1,370 @@
+{
+  "timestamp": "2026-05-02T21:49:27.804Z",
+  "host_ref": "uetkiogzuwhzshczaajr",
+  "function_url": "https://uetkiogzuwhzshczaajr.supabase.co/functions/v1/mcp",
+  "n_trials": 20,
+  "insert_schedule_ms": [
+    100,
+    5000,
+    10000
+  ],
+  "call_timeout_ms": 30000,
+  "trials": [
+    {
+      "n": 0,
+      "table": "spike_warmup_1777758468891_0",
+      "outcome": "delivered_n1",
+      "wall_ms": 5326.1826249999995,
+      "insert_offsets_ms": [
+        176.17866699999968,
+        5076.243125,
+        null
+      ],
+      "delivered_n": 1,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 1,
+      "table": "spike_warmup_1777758468891_1",
+      "outcome": "delivered_n1",
+      "wall_ms": 5277.710541999999,
+      "insert_offsets_ms": [
+        174.9439999999995,
+        5074.658083999999,
+        null
+      ],
+      "delivered_n": 1,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 2,
+      "table": "spike_warmup_1777758468891_2",
+      "outcome": "delivered_n0",
+      "wall_ms": 514.2353750000002,
+      "insert_offsets_ms": [
+        175.22929099999965,
+        null,
+        null
+      ],
+      "delivered_n": 0,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 3,
+      "table": "spike_warmup_1777758468891_3",
+      "outcome": "delivered_n1",
+      "wall_ms": 5272.886375000002,
+      "insert_offsets_ms": [
+        175.22233400000187,
+        5075.697834000002,
+        null
+      ],
+      "delivered_n": 1,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 4,
+      "table": "spike_warmup_1777758468891_4",
+      "outcome": "delivered_n1",
+      "wall_ms": 5304.4619170000005,
+      "insert_offsets_ms": [
+        175.60525000000052,
+        5074.574334000001,
+        null
+      ],
+      "delivered_n": 1,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 5,
+      "table": "spike_warmup_1777758468891_5",
+      "outcome": "delivered_n1",
+      "wall_ms": 5274.023708000001,
+      "insert_offsets_ms": [
+        175.0796670000018,
+        5074.685833000003,
+        null
+      ],
+      "delivered_n": 1,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 6,
+      "table": "spike_warmup_1777758468891_6",
+      "outcome": "delivered_n0",
+      "wall_ms": 519.7948329999999,
+      "insert_offsets_ms": [
+        174.21487499999785,
+        null,
+        null
+      ],
+      "delivered_n": 0,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 7,
+      "table": "spike_warmup_1777758468891_7",
+      "outcome": "delivered_n1",
+      "wall_ms": 5273.954500000007,
+      "insert_offsets_ms": [
+        175.3419170000052,
+        5072.828625000002,
+        null
+      ],
+      "delivered_n": 1,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 8,
+      "table": "spike_warmup_1777758468891_8",
+      "outcome": "delivered_n1",
+      "wall_ms": 5266.930791999999,
+      "insert_offsets_ms": [
+        174.81674999999814,
+        5074.9389999999985,
+        null
+      ],
+      "delivered_n": 1,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 9,
+      "table": "spike_warmup_1777758468891_9",
+      "outcome": "delivered_n1",
+      "wall_ms": 5299.901790999997,
+      "insert_offsets_ms": [
+        174.28949999999895,
+        5074.382958000002,
+        null
+      ],
+      "delivered_n": 1,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 10,
+      "table": "spike_warmup_1777758468891_10",
+      "outcome": "delivered_n1",
+      "wall_ms": 5256.051999999996,
+      "insert_offsets_ms": [
+        175.4996669999964,
+        5074.5275829999955,
+        null
+      ],
+      "delivered_n": 1,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 11,
+      "table": "spike_warmup_1777758468891_11",
+      "outcome": "delivered_n0",
+      "wall_ms": 512.0459579999952,
+      "insert_offsets_ms": [
+        174.42979099999502,
+        null,
+        null
+      ],
+      "delivered_n": 0,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 12,
+      "table": "spike_warmup_1777758468891_12",
+      "outcome": "delivered_n1",
+      "wall_ms": 5263.756833000007,
+      "insert_offsets_ms": [
+        175.01791700000467,
+        5078.320166999998,
+        null
+      ],
+      "delivered_n": 1,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 13,
+      "table": "spike_warmup_1777758468891_13",
+      "outcome": "delivered_n0",
+      "wall_ms": 547.7016670000012,
+      "insert_offsets_ms": [
+        174.42312500000116,
+        null,
+        null
+      ],
+      "delivered_n": 0,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 14,
+      "table": "spike_warmup_1777758468891_14",
+      "outcome": "delivered_n1",
+      "wall_ms": 5270.389666999996,
+      "insert_offsets_ms": [
+        174.0173749999958,
+        5078.932375000004,
+        null
+      ],
+      "delivered_n": 1,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 15,
+      "table": "spike_warmup_1777758468891_15",
+      "outcome": "delivered_n1",
+      "wall_ms": 5273.234124999988,
+      "insert_offsets_ms": [
+        174.4160419999971,
+        5074.1114589999925,
+        null
+      ],
+      "delivered_n": 1,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 16,
+      "table": "spike_warmup_1777758468891_16",
+      "outcome": "delivered_n1",
+      "wall_ms": 5287.235291999998,
+      "insert_offsets_ms": [
+        174.0173339999892,
+        5075.188209,
+        null
+      ],
+      "delivered_n": 1,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 17,
+      "table": "spike_warmup_1777758468891_17",
+      "outcome": "delivered_n0",
+      "wall_ms": 529.3534999999974,
+      "insert_offsets_ms": [
+        174.4169580000016,
+        null,
+        null
+      ],
+      "delivered_n": 0,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 18,
+      "table": "spike_warmup_1777758468891_18",
+      "outcome": "delivered_n1",
+      "wall_ms": 5280.952709000005,
+      "insert_offsets_ms": [
+        174.48529199999757,
+        5074.469167000003,
+        null
+      ],
+      "delivered_n": 1,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    },
+    {
+      "n": 19,
+      "table": "spike_warmup_1777758468891_19",
+      "outcome": "delivered_n0",
+      "wall_ms": 539.4202079999959,
+      "insert_offsets_ms": [
+        174.74099999999453,
+        null,
+        null
+      ],
+      "delivered_n": 0,
+      "closed_reason": "max_events",
+      "events_returned": 1,
+      "http_status": 200,
+      "error_message": null
+    }
+  ],
+  "delivered": {
+    "count": 20,
+    "wall_ms": [
+      512.0459579999952,
+      514.2353750000002,
+      519.7948329999999,
+      529.3534999999974,
+      539.4202079999959,
+      547.7016670000012,
+      5256.051999999996,
+      5263.756833000007,
+      5266.930791999999,
+      5270.389666999996,
+      5272.886375000002,
+      5273.234124999988,
+      5273.954500000007,
+      5274.023708000001,
+      5277.710541999999,
+      5280.952709000005,
+      5287.235291999998,
+      5299.901790999997,
+      5304.4619170000005,
+      5326.1826249999995
+    ],
+    "by_bucket": {
+      "delivered_n0": 6,
+      "delivered_n1": 14,
+      "delivered_n2": 0
+    }
+  },
+  "timeouts": 0,
+  "errors": 0,
+  "p50_ms": 5271.638020999999,
+  "p95_ms": 5305.5479524,
+  "p99_ms": 5322.05569048,
+  "recommended_smoke_wall_budget_ms": 12000
+}
