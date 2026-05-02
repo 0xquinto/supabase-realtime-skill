@@ -8,9 +8,11 @@ eval/reports
 supabase/.temp
 
 # Machine-generated eval artifacts: ignore everything under logs/ by default,
-# then carve out spike-latency JSON logs (finding-quality, committed).
+# then carve out spike-latency + spike-edge-warmup JSON logs (finding-quality,
+# committed alongside docs/spike-findings.md narrative).
 logs/*
 !logs/spike-latency/
+!logs/spike-edge-warmup/
 
 # Per-provider embedding backups (each ~3.8 MiB; the canonical
 # fixtures/embeddings.json IS committed). Keep backups local-only —

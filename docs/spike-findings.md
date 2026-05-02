@@ -176,3 +176,65 @@ Auxiliary fixes that surfaced during the rewire:
 
 **Live-deploy verification** (POST `Authorization: Bearer <jwt>` with a JSON-RPC `tools/call` body) is the operator's next step — see `docs/ship-status.md` item 3.
 
+---
+
+# T7-Edge — `watch_table` warm-up distribution on the deployed Edge Function (2026-05-02)
+
+**Spike:** [`eval/spike-edge-warmup.ts`](../eval/spike-edge-warmup.ts) — n=20 trials, fresh table per trial, multi-INSERT schedule (+100ms / +5s / +10s), drives JSON-RPC `tools/call watch_table` against the deployed function URL with `timeout_ms: 30_000, max_events: 1`. Service-role bearer (matches the canonical npm-side smoke). Required by ADR-0016 risk mitigation per [v1.0.0 ship-surface recon](recon/2026-05-02-v1.0.0-ship-surface-recon.md) § "Adversarial pass" Risk #1: size the smoke wall budget against the *measured* p99, not against the npm-side T7 ~5s precedent.
+
+**Run:** [`logs/spike-edge-warmup/1777757720.json`](../logs/spike-edge-warmup/1777757720.json), 65.4s wallclock, ~$0 (host project Pro instance, no `withBranch` provisioning).
+
+## Headline distribution
+
+| Metric | Value |
+|---|---|
+| Delivered | **20/20** (100%) |
+| Bucket: n0 (warm path, <5s) | 13/20 (65%) |
+| Bucket: n1 (post-warm-up, 5-10s) | 7/20 (35%) |
+| Bucket: n2 (>10s) | 0/20 |
+| p50 wall | 709ms |
+| p95 wall | 5486ms |
+| p99 wall | 5490ms |
+| **Recommended Edge smoke wall budget** | **12,000ms** (p99 × 1.5 floored at 12s) |
+
+Bimodal distribution: either the per-request Edge isolate's subscribe handshake completes fast enough that INSERT@+100ms (n0) lands post-SUBSCRIBED (~700ms wall), or it falls through to n1 at +5s (~5.45s wall). 0/20 trials needed n2; the +10s INSERT is observable safety margin, not load-bearing.
+
+This matches the npm-side T7 finding ("~5s warm-up window") cleanly — Edge adds ~150-200ms of network/transport on top, but the dominant cost is the same Realtime warm-up on a freshly-published table.
+
+## Sub-findings (worth their own follow-ups)
+
+### 1. Single-INSERT@+100ms is unsafe on Edge
+
+First-pass spike used a single INSERT at +100ms post-call-dispatch. **17/20 trials timed out at 30s** (some with anon JWT, some with service_role — auth is not the variable). The per-request Edge subscribe handshake exceeds 100ms in the cold-isolate path, so the row commits pre-SUBSCRIBED and Postgres-Changes drops it. The function holds the subscription open until `timeout_ms`, then returns `closed_reason: timeout` with 0 events.
+
+Mitigation in the spike: multi-INSERT schedule (+100ms / +5s / +10s) — at least one INSERT is guaranteed to land post-SUBSCRIBED for typical Edge cold-start budgets. **The v1.0.0 watch_table Edge smoke MUST use the multi-INSERT schedule** (mirrors `tests/smoke/watch-table.smoke.test.ts:87-89`); single-shot INSERT designs will flake in consumer hands.
+
+### 2. `new` payload arrives as `null` in the deployed Edge runtime
+
+Every delivered event in the spike returned `{ event: "INSERT", table, schema: "public", new: null, old: null, commit_timestamp: null }`. The npm-side `WatchTableEventSchema` already allows `new: null` (`z.record(z.unknown()).nullable()`), so the schema is permissive — but production agents using `watch_table` through the deployed function will get *event metadata only*, not row data.
+
+Why bucketing in the spike is time-based (not payload-based): spike originally tried `payload.events[0].new.n` to identify which INSERT was delivered; that's `null` on Edge so the spike fell back to wall-time bucketing (which works because INSERTs fire on a known schedule and the function returns immediately on first event).
+
+**Likely cause:** REPLICA IDENTITY DEFAULT vs FULL on the spike's freshly-created tables (the spike does `create table ... primary key default gen_random_uuid()` without setting `replica identity full`). DEFAULT publishes only the changed columns + PK on UPDATE/DELETE, but for INSERT the WAL ought to carry the full row. Not yet verified — possible alternates: a Realtime broker config on the host project, or a deployed-supabase-js path that drops `new` when certain conditions aren't met.
+
+**Action item:** worth a separate ADR or `references/replication-identity.md` revision once the cause is pinned. Doesn't block ADR-0016 (the smoke can assert event-count without inspecting `new`), but it's a substrate concern v1.0.x consumers will hit.
+
+### 3. Anon-JWT failure mode is unverified
+
+First-pass spike used `keys.anon` and saw 4/4 timeout before being killed. Switching to `keys.serviceRole` and multi-INSERT gave 20/20 delivered. The auth variable was never re-tested in isolation, so it's unclear whether anon JWT against a fresh table (no RLS policies, RLS-disabled by default for `create table`) would succeed under the multi-INSERT schedule. The ADR-0015-shipped Edge smokes use anon for `tools/list`, `/health`, `describe_table_changes`, and public-channel `broadcast_to_channel` — none of which exercise the `realtime.messages` RLS path that `watch_table` traverses.
+
+**Action item:** the v1.0.0 watch_table Edge smoke (per ADR-0016) should test with the same JWT shape consumers will actually use. Recommended: smoke creates the temp table + a permissive RLS policy granting `select` to `anon`, mirroring what consumer-side migrations would do. Alternative: smoke uses service_role bearer for the spike's reasons, and a separate smoke validates the anon-JWT-with-RLS-policy path.
+
+## Methodology consequences for ADR-0016
+
+1. **Smoke wall budget = 12s** — covers p99 + comfortable margin, well within the Edge isolate's 150s ceiling and the spec's 30s smoke-test tradition.
+2. **Multi-INSERT schedule is mandatory** — single-shot INSERTs at +100ms will flake. Mirror `watch-table.smoke.test.ts:87-89` exactly.
+3. **Don't assert on `new`-payload contents** — schema permits null, deployed runtime returns null. Assert event count + `closed_reason: max_events` only.
+4. **Auth-shape in the smoke is an open ADR-0016 decision** — service_role (matches this spike) or anon-with-RLS-policy (matches consumer contract). Tilt: anon-with-RLS-policy, since the smoke's job is consumer-shaped reliability evidence; if that's flaky, that's the load-bearing finding.
+
+## What the spike does NOT prove
+
+- **Cold-start variance under no warm isolate.** All 20 trials ran consecutively; the host project's Edge isolate stayed warm. Real consumer behavior (one-off `watch_table` invocations spaced minutes apart) may see longer p99. Out-of-scope for the v1.0.0 ship; v2 hardening could add a "minute-spaced trial" variant if cold-start tax becomes load-bearing.
+- **Concurrent watch_table calls.** Spike serializes trials. Each call provisions a fresh per-request server, but Realtime broker behavior under concurrent subscribes-on-the-same-table is unmeasured.
+- **Anon-JWT-with-RLS-policy delivery success rate.** See sub-finding #3.
+
