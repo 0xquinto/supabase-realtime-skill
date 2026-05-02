@@ -64,31 +64,36 @@ Releases material to this artifact (extracted from [supabase-js CHANGELOG](https
 |---|---|---|---|
 | 2.91.0 | 2026-01-20 | **Default serializer to 2.0.0** (#2034) | Protocol-level. Wire format change; smoke tests are the canonical regression gate. |
 | 2.93.0 | 2026-01-26 | Generic overload for `postgres_changes` event type (#1984); heartbeat for initial connection error (#1746) | Type-only + connection-resilience improvements. |
-| 2.93.1 | 2026-01-27 | **Revert** validate table filter in postgres_changes event dispatch (#2060) | Reverts a 2.90.1 fix that regressed something — caller-invisible. |
-| 2.95.0 | 2026-02-05 | `removeChannel` when unsubscribe successfully (#2091) | Cleanup-pattern change; could interact with our channel-removal sequencing. |
-| 2.98.0 | 2026-02-26 | **Patch channel join payloads with resolved access token before flushing send buffer** (#2136) | Directly relevant to ADR-0011's `setAuth` pattern. Likely a *silent improvement* to the same gap; worth verifying smoke tests stay green. |
+| 2.93.1 | 2026-01-26 | **Revert** validate table filter in postgres_changes event dispatch (#2060) | Reverts a 2.90.1 fix that regressed something — caller-invisible. |
+| 2.95.3 | 2026-02-06 | `removeChannel` when unsubscribe successfully (#2091) | Cleanup-pattern change; could interact with our channel-removal sequencing. |
+| 2.98.0 | 2026-02-26 | Patch channel join payloads with resolved access token before flushing send buffer (#2136) | **Diagnostic-only for our use case.** Per the upstream PR body, #2136 is scoped to async-storage `accessToken` callback timing on React Native / Expo, and **explicitly a no-op on browsers and any environment with synchronous token resolution**. Does *not* address the Edge-Function-context gap ADR-0011 closed (where `_getAccessToken` falls back to `supabaseKey` because no session exists at all, not because a callback is racing). ADR-0011's manual `setAuth(jwt)` remains load-bearing on 2.105.x. |
 | 2.100.0 | 2026-03-23 | **Use phoenix's js lib inside realtime-js** (#2119) | Significant internal refactor; protocol surface unchanged but timing characteristics may shift. |
 | 2.101.0 | 2026-03-30 | **Block setting `postgres_changes` event listener after joining** (#2201); add `copyBindings` (#2197) | Late-binding pattern is rejected; our `boundedSubscribe` registers listeners *before* `subscribe()` so this is no-op for us. Worth confirming. |
 | 2.103.3 | 2026-04-16 | **Throw Error objects instead of bare strings** (#2256) | Aligns with ADR-0013's try/catch wrapper shape. Strict improvement for our error-handling. |
 | 2.105.0 | 2026-04-27 | **Realtime deferred disconnect** (#2282) | Changes channel-disconnect lifecycle. Could affect short-lived Edge isolate cleanup. |
 | 2.105.1 | 2026-04-28 | **Surface real Error on transport-level CHANNEL_ERROR** (#2299) | Diagnostic-only — better error messages on subscribe failure. |
 
-**The two highest-leverage items:**
+**The highest-leverage item:**
 
-- **2.98.0 access-token patch on channel join.** Description matches the exact gap ADR-0011 closed manually (`setAuth` before subscribe). The substrate may now do this internally, which would make our `setAuth` calls *redundant but harmless*. Worth a smoke-test pass on 2.105.x before committing.
 - **2.91.0 default serializer 2.0.0.** Wire-format change. The substrate ought to negotiate transparently, but a smoke-test re-run is the only honest evidence.
+
+**The previously-load-bearing item that turned out to be a different gap:**
+
+- **2.98.0 access-token patch on channel join (#2136).** First read of the changelog title suggested this might address the same gap ADR-0011 closed manually. **It does not.** The upstream PR body scopes the fix to async-storage `accessToken` callback timing (RN/Expo) and explicitly notes it is a no-op on browsers and any sync-token environment. Edge Function isolates resolve tokens synchronously and have no persisted session at all — the gap ADR-0011 closed is structurally different (fallback to anon `supabaseKey` when no session exists, not callback-race). Calling out explicitly because the changelog title is misleading and a future contributor could re-derive the same wrong inference. **ADR-0011's `setAuth(jwt)` discipline remains load-bearing under any supabase-js version on the 2.x line.**
 
 **v3.0.0 staging.** 18 prereleases out (3.0.0-next.0 → next.18). The recon does not investigate v3 in detail — it's pre-stable, no ADR-0014 commitment is wise on a moving target. ADR-0014 should explicitly bracket the floor as `>=2.88.0 <3.0.0` (or the more idiomatic `^2.x` shape) to keep v3 out of scope until it's released and proven.
 
 **Implication for ADR-0014:**
 
-Three plausible floor decisions, in order of conservatism:
+Three plausible floor decisions:
 
-- **(α) Hold at `^2.88.0`.** Safe; proven; but 17 minors of drift means real consumers default to versions we've never run smoke tests against.
-- **(β) Bump to `^2.105.x` (latest stable as of recon).** Captures all post-floor improvements; requires re-running ADR-0011 + ADR-0013 smoke receipts on 2.105.x as evidence the bump is safe. Cost: one Pro branch + ~5min wall time.
-- **(γ) Bracket: `>=2.88.0 <3.0.0`.** Acknowledges drift exists but doesn't claim a specific upper bound is verified. Range is honest; bound is mechanical (v3 is staging).
+- **(α) Hold at `^2.88.0`.** Safe; proven; but 17 minors of drift means real consumers default to versions we've never run smoke tests against. Weakest signal.
+- **(β) Bump to `^2.105.x` (latest stable as of recon).** Captures all post-floor improvements; requires re-running ADR-0011 + ADR-0013 smoke receipts on 2.105.x as evidence the bump is safe. Cost: one Pro branch + ~5min wall time. Produces *new* evidence that ages quickly (2.106.x ships, the receipt is one minor stale).
+- **(γ) Bracket: `>=2.88.0 <3.0.0`.** Acknowledges drift exists but doesn't claim a specific upper bound is verified. Range is honest; the lower bound is what ADR-0011 + ADR-0013 receipts already prove; the upper bound is mechanical (v3 is staging).
 
-**Recommend (β) with smoke-test receipts**, falling back to (γ) if a smoke run on 2.105.x surfaces any regression. Stay-at-(α) is the weakest option — it ships a floor that's already four months out of date *and* is a worse signal to consumers than (γ).
+**Tentative recommendation: (γ) as primary, with (β) as a strengthening option if smoke receipts are cheap to produce.** (γ) is honest about what's verified (the floor) and what's mechanical (the v3 ceiling); a peer-dep range admits the drift instead of claiming verification we don't have. (β) requires producing a *new* smoke-receipt artifact for an ADR whose load-bearing receipts already exist on the current floor — useful but not prerequisite. Staying at (α) is the weakest option — ships a floor that's already four months out of date.
+
+This is a real judgment call, not a clean win for either side. The trade-off is: (β) buys "verified on latest" at the cost of a receipt that ages one minor at a time; (γ) buys "honest about drift" at the cost of telling consumers "we haven't verified above 2.88.x." ADR-0014 should commit explicitly; the recon doesn't pick.
 
 ### Fixture-design pass on adversarial cross-tenant corpora — deferred contingent
 
@@ -113,14 +118,14 @@ In rough order of effect:
    - **(c)** Promote everything, plus a sample data row (`INSERT INTO memberships ...`).
    - **Recommend (b)**. (a) is incomplete (no Broadcast Authorization gate ships); (c) is overreach (sample data is consumer-specific). The migration's job is to ship the *substrate* the worked example demonstrates, not to populate it.
 
-2. **supabase-js floor.** See § "External research findings — supabase-js." Recommend **(β) `^2.105.x`** with re-verified smoke-test receipts on 2.105.x.
+2. **supabase-js floor.** See § "External research findings — supabase-js." Recon's tentative tilt: **(γ) bracket `>=2.88.0 <3.0.0`** as primary (honest about drift, doesn't claim verification we don't have); **(β) bump to `^2.105.x` with re-verified smoke receipts** as a strengthening option. Real judgment call; ADR-0014 commits.
 
 3. **Manifest cell `cross_tenant_leakage_rate_max`.** Recommend **defer**. Rationale: substrate-vs-composition split (ADR-0012 § 2) + proxy-gap risk on LLM-augmented adversarial fixtures. Future ADR can revisit when fixture-design produces a defensible corpus.
 
 4. **`boundedQueueDrain` `private` threading.** Recommend **thread it through** — same shape as ADR-0013's tool-side threading; closes the open question ADR-0013 deferred. Low cost; closes a real gap (drain a tenant-scoped queue + broadcast to a tenant-private channel is the worked-example flow).
 
 5. **npm bump shape.**
-   - **(i) `0.2.0`** with all three items (private flag, supabase-js floor, demo migration). Single ship.
+   - **(i) `0.2.0`** with all three items (`private` flag, supabase-js floor decision per (2), demo migration per Decision 1(b)). Single ship.
    - **(ii) Split:** `0.2.0` for ADR-0013's `private` flag now (already on `main`); separate `0.3.0` for the demo migration + floor bump.
    - **Recommend (i)**. The worked example IS the headline of `0.2.0`; splitting just creates two smaller releases that each carry less story. The handoff (line 104) recommends the same.
 
@@ -143,7 +148,7 @@ If ADR-0014 ends up *not* deferring the manifest cell, the falsifiable effect wo
 
 ## Where design risk concentrates
 
-1. **Floor-bump regression risk.** Bumping `^2.88.0` → `^2.105.x` is a 17-minor-version jump. The smoke tests are the canonical regression gate; the cost is one Pro branch + 5min. The risk of *not* re-verifying is silent breakage on a version a consumer will hit by default (`npm install` resolves to the latest matching minor).
+1. **Floor decision regression risk.** If ADR-0014 picks (β) (bump to `^2.105.x`), the 17-minor-version jump needs smoke-test re-verification — one Pro branch, ~5min wall time. If ADR-0014 picks (γ) (bracket `>=2.88.0 <3.0.0`), there's no new evidence to produce but consumers still resolve to the latest matching minor by default (which they would under (β) too, just with our floor bumped). The actual risk surface is identical for the consumer; what differs is whether *we* claim to have verified the upper end. Recommend the recon's tilt: (γ) is honest about what's verified; (β) is honest about what's been *re-*verified at additional cost. Don't pick (α).
 
 2. **Manifest-cell deferral discipline.** Same trap ADR-0012 surfaced: drafting momentum can roll a substrate-correctness ship into a fixture-design pass that has different evidence requirements. ADR-0014 should *explicitly* defer with rationale (substrate-vs-composition + proxy-gap), not silently skip.
 
@@ -157,11 +162,11 @@ If ADR-0014 ends up *not* deferring the manifest cell, the falsifiable effect wo
 
 ## What this means for the next step
 
-**Direction:** narrow composition ship — promote the smoke-test schema to a permanent migration; move the supabase-js floor to a verified-recent stable; thread `private` through `boundedQueueDrain`; defer the manifest cell with rationale; open a CHANGELOG. All in one PR (handoff line 104 recommends bundling, this recon agrees).
+**Direction:** narrow composition ship — promote the smoke-test schema to a permanent migration; commit on the supabase-js floor (recon tilts toward (γ) bracket, ADR commits); thread `private` through `boundedQueueDrain`; defer the manifest cell with rationale; open a CHANGELOG. All in one PR (handoff line 104 recommends bundling, this recon agrees).
 
 **Recommended ADR pre-loads:**
 
-- **Sequence smoke-test re-run on 2.105.x BEFORE the floor bump.** Same FAIL→PASS-style discipline ADR-0011 used, but inverted: expect PASS on 2.105.x; if it fails, fall back to (γ) `>=2.88.0 <3.0.0` and document why.
+- **Commit explicitly on the floor decision** — (γ) bracket is the recon's tentative tilt; (β) bump-with-receipts is viable if the smoke-receipt cost is acceptable. Either path: ADR-0014's body should reproduce the trade-off and name the choice. Don't slide into (β) by default just because "newer is better."
 - **Promote the smoke-test SQL to `supabase/migrations/<timestamp>_multi_tenant_audit_demo.sql`** — three tables (`audit_events`, `memberships` with junction shape) + `realtime.messages` SELECT/INSERT policies + `public.user_tenant_ids()` SECURITY DEFINER STABLE helper.
 - **Refactor smoke test to apply the migration as setup**, not re-define the schema inline. Separate commit, same PR. Closes risk (3).
 - **Thread `private?: boolean` through `boundedQueueDrain`'s public API.** Default `false`; same additive-MCP-versioning convention.
@@ -173,7 +178,7 @@ These are recommendations, not decisions — ADR will be filed as **Proposed**, 
 
 **Open questions deferred to the ADR pass:**
 
-- Whether the smoke-test re-run on 2.105.x should test ADR-0011's `setAuth` pattern explicitly (does 2.98.0's "patch channel join payloads with resolved access token" make our `setAuth` calls redundant?). Recommend yes — if redundant, document; if still needed, document. Either way, the receipts move from "verified on 2.88.0" to "verified on 2.105.x."
+- If ADR-0014 picks (β), whether the smoke-test re-run on 2.105.x is a pre-merge gate or a post-merge confirm. Pre-merge is the rigorous shape (matches ADR-0011 / ADR-0013 receipt discipline); post-merge keeps the ADR moving but loosens the evidence chain. The recon's preference is pre-merge if (β) is chosen at all.
 - Whether to add a `useDemoMigration: boolean` knob anywhere — probably no; consumers either apply the migration or don't, that's a `supabase db push` decision, not a runtime config.
 - Whether to mirror the `boundedWatch` `private` threading (Postgres-Changes leg) for symmetry, even though Postgres-Changes RLS doesn't use the `private` flag. Recommend no — would advertise a knob with no effect on that leg, confusing the contract.
 - Whether ADR-0014 also needs to update the MCP `inputSchema` JSON for `boundedQueueDrain`'s `private` threading. ADR-0013 already updated it for `BroadcastInput` + `SubscribeChannelInput`; same convention applies.
@@ -193,7 +198,7 @@ These are recommendations, not decisions — ADR will be filed as **Proposed**, 
 
 **External (supabase-js drift):**
 - [supabase-js CHANGELOG](https://raw.githubusercontent.com/supabase/supabase-js/master/CHANGELOG.md) — primary source for the 17-minor-version drift; releases 2.88.0 through 2.105.1 reviewed.
-- [supabase-js#2136](https://github.com/supabase/supabase-js/pull/2136) — 2.98.0 patch channel join payloads with resolved access token; potentially redundant with ADR-0011's `setAuth` pattern.
+- [supabase-js#2136](https://github.com/supabase/supabase-js/pull/2136) — 2.98.0 patch channel join payloads with resolved access token; **scoped to async-storage callback timing on RN/Expo, no-op on browsers / sync-token environments per upstream PR body**. Does NOT address the Edge Function fallback gap ADR-0011 closed. Cited explicitly to prevent future contributors re-deriving the same wrong inference from the changelog title.
 - [supabase-js#2034](https://github.com/supabase/supabase-js/pull/2034) — 2.91.0 default serializer 2.0.0; protocol-level wire format change.
 - [supabase-js#2119](https://github.com/supabase/supabase-js/pull/2119) — 2.100.0 use phoenix's js lib inside realtime-js; significant internal refactor.
 - [supabase-js#2256](https://github.com/supabase/supabase-js/pull/2256) — 2.103.3 throw Error objects instead of bare strings; aligns with ADR-0013 try/catch wrapper shape.
