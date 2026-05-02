@@ -36,5 +36,6 @@ export async function handleSubscribe(
     timeout_ms: input.timeout_ms,
     max_events: input.max_events,
     ...(input.event_filter !== undefined ? { event_filter: input.event_filter } : {}),
+    ...(input.private !== undefined ? { private: input.private } : {}),
   });
 }

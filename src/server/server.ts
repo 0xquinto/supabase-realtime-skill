@@ -62,13 +62,18 @@ const TOOL_DEFS = [
   {
     name: "broadcast_to_channel",
     description:
-      "Fire-and-forget broadcast on a Realtime channel. Server retries 5xx idempotently up to 3 times.",
+      "Fire-and-forget broadcast on a Realtime channel. Server retries 5xx idempotently up to 3 times. Set `private: true` to opt in to Broadcast Authorization (gated by realtime.messages RLS); requires the agent's JWT to pass the channel's INSERT policy.",
     inputSchema: {
       type: "object",
       properties: {
         channel: { type: "string" },
         event: { type: "string" },
         payload: { type: "object" },
+        private: {
+          type: "boolean",
+          description:
+            "Opt-in to Realtime Broadcast Authorization (private channel). Defaults to false for v0.1.x backward compatibility.",
+        },
       },
       required: ["channel", "event", "payload"],
     },
@@ -76,7 +81,7 @@ const TOOL_DEFS = [
   {
     name: "subscribe_to_channel",
     description:
-      "Bounded subscription to a Realtime broadcast channel. Mirrors watch_table's bounded shape.",
+      "Bounded subscription to a Realtime broadcast channel. Mirrors watch_table's bounded shape. Set `private: true` to opt in to Broadcast Authorization (subscribe gated by realtime.messages RLS).",
     inputSchema: {
       type: "object",
       properties: {
@@ -84,6 +89,11 @@ const TOOL_DEFS = [
         event_filter: { type: "string" },
         timeout_ms: { type: "number", minimum: 1000, maximum: 120000, default: 60000 },
         max_events: { type: "number", minimum: 1, maximum: 200, default: 50 },
+        private: {
+          type: "boolean",
+          description:
+            "Opt-in to Realtime Broadcast Authorization (private channel). Defaults to false for v0.1.x backward compatibility.",
+        },
       },
       required: ["channel"],
     },
@@ -151,22 +161,23 @@ export function makeServer(cfg: ServerConfig): Server {
         case "broadcast_to_channel": {
           result = await handleBroadcast(req.params.arguments, {
             sender: {
+              // httpSend (added supabase-js@050687a, Oct 2025) is the
+              // explicit REST-side broadcast send. Saves the SUBSCRIBED
+              // handshake roundtrip vs the deprecated implicit-fallback
+              // ch.send(). Failure mode: rejects with Error on non-202;
+              // the discriminated `success: false` branch in the .d.ts
+              // is unreachable at runtime (RealtimeChannel.js:441-447) —
+              // we wrap-and-translate to ToolError("UPSTREAM_ERROR") so
+              // handleBroadcast's retry envelope sees a thrown failure.
               send: async (input) => {
-                const ch = supabaseClient.channel(input.channel);
-                await new Promise<void>((resolve, reject) => {
-                  const t = setTimeout(() => reject(new Error("subscribe timeout")), 10_000);
-                  ch.subscribe((s) => {
-                    if (s === "SUBSCRIBED") {
-                      clearTimeout(t);
-                      resolve();
-                    } else if (s === "CHANNEL_ERROR" || s === "TIMED_OUT") {
-                      clearTimeout(t);
-                      reject(new Error(`subscribe failed: ${s}`));
-                    }
-                  });
-                });
-                await ch.send({ type: "broadcast", event: input.event, payload: input.payload });
-                await supabaseClient.removeChannel(ch);
+                const ch = input.private
+                  ? supabaseClient.channel(input.channel, { config: { private: true } })
+                  : supabaseClient.channel(input.channel);
+                try {
+                  await ch.httpSend(input.event, input.payload, { timeout: 10_000 });
+                } finally {
+                  await supabaseClient.removeChannel(ch);
+                }
                 channelRegistry.push({
                   name: input.channel,
                   member_count: 1,

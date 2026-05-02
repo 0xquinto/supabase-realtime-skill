@@ -1,34 +1,47 @@
 // tests/smoke/multi-tenant-rls.smoke.test.ts
 //
 // Multi-tenant RLS smoke test: provisions one branch with two real auth.users,
-// two organizations, two memberships, and a tenant-scoped table with RLS
-// policies. Subscribes via the user's forwarded JWT (NOT serviceRole) and
-// asserts:
+// two memberships, a tenant-scoped audit_events table, and (for the broadcast
+// half) realtime.messages RLS policies gating private-channel subscribe and
+// send. Subscribes via the user's forwarded JWT (NOT serviceRole) and asserts
+// two layers:
 //
+// LAYER 1 — Postgres-Changes RLS (ADR-0011):
 //   (a) User A subscribed under JWT_A receives events for rows in tenant_a
-//       within 30s. This is the diagnostic — if it fails, the JWT isn't
-//       reaching the websocket leg and Realtime is evaluating RLS against
-//       the anon claims_role (which has no policy), so the event is dropped.
-//
+//       within 30s. Diagnostic — if it fails, the JWT isn't reaching the
+//       websocket leg and Realtime is evaluating RLS against anon claims_role.
 //   (b) User A subscribed under JWT_A does NOT receive events for rows in
-//       tenant_b within 5s after a known cross-tenant insert. This is the
-//       contract — RLS-enforced cross-tenant isolation.
+//       tenant_b. Contract — RLS-enforced cross-tenant isolation.
 //
-// Pre-fix (current code): assertion (a) FAILS — global.headers.Authorization
-// doesn't propagate to the websocket; supabase-js' _getAccessToken falls back
-// to supabaseKey (anon), Realtime evaluates RLS against anon, no anon policy
-// exists, no events delivered. Assertion (b) vacuously passes.
+// LAYER 2 — Broadcast Authorization RLS (ADR-0013):
+//   (c) User A subscribed to `tenant:<tenantA>:audit-feed` as a private
+//       channel receives a broadcast that user A sent to that channel.
+//       Diagnostic — confirms the realtime.messages RLS policy admits the
+//       authorized path.
+//   (d) User B trying to broadcast to `tenant:<tenantA>:audit-feed` is
+//       rejected by realtime.messages RLS (no membership in tenant_a).
+//       Contract — substrate enforces cross-tenant injection prevention.
 //
-// Post-fix (client.realtime.setAuth(token) called after createClient):
-// assertion (a) PASSES (A sees own-tenant events), (b) PASSES (RLS blocks B's).
+// Pre-fix for layer 1: setAuth gap → assertion (a) FAILS.
+// Pre-fix for layer 2: public channels (no `private: true` opt-in) → cross-
+//   tenant inject succeeds, assertion (d) FAILS.
 //
-// Cost: one Pro branch (~3min provisioning), runs end-to-end in ~60-90s after
-// branch is up. Skips when EVAL_SUPABASE_PAT / EVAL_HOST_PROJECT_REF missing.
+// Post-fix for both layers: all four assertions PASS.
+//
+// Cost: one Pro branch (~3min provisioning), runs end-to-end in ~90-120s
+// after branch is up. Skips when EVAL_SUPABASE_PAT / EVAL_HOST_PROJECT_REF
+// missing.
 
 import { createClient } from "@supabase/supabase-js";
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
-import { boundedWatch, makeSupabaseAdapter } from "../../src/server/realtime-client.ts";
+import { type BroadcastSender, handleBroadcast } from "../../src/server/broadcast.ts";
+import {
+  boundedSubscribe,
+  boundedWatch,
+  makeSupabaseAdapter,
+  makeSupabaseBroadcastAdapter,
+} from "../../src/server/realtime-client.ts";
 import { buildBranchPoolerUrl, withBranch } from "../../vendor/foundation/branch.ts";
 import { fetchProjectKeys } from "./_helpers/project-keys.ts";
 import { ResilientApiClient } from "./_helpers/resilient-api-client.ts";
@@ -39,7 +52,7 @@ const REGION = process.env.EVAL_REGION ?? "us-east-1";
 const SHOULD_RUN = !!(PAT && HOST_REF);
 
 describe.skipIf(!SHOULD_RUN)("multi-tenant RLS smoke (real branch, two tenants)", () => {
-  it("tenant A's JWT sees own-tenant events and not cross-tenant events", async () => {
+  it("layer 1 (Postgres-Changes RLS): tenant A's JWT sees own-tenant events and not cross-tenant events", async () => {
     const client = new ResilientApiClient({
       pat: PAT as string,
       hostProjectRef: HOST_REF as string,
@@ -97,6 +110,48 @@ describe.skipIf(!SHOULD_RUN)("multi-tenant RLS smoke (real branch, two tenants)"
                 )
             `;
           await sql`alter publication supabase_realtime add table audit_events`;
+
+          // ---------- Layer 2 setup: realtime.messages RLS for Broadcast Auth ----------
+          // Helper: tenant_ids the JWT identity is a member of. SECURITY
+          // DEFINER STABLE so the membership lookup is evaluated once per
+          // connection (cached), not per message. This is the canonical
+          // pattern documented in references/multi-tenant-rls.md.
+          await sql`
+              create or replace function public.user_tenant_ids()
+              returns uuid[]
+              language sql
+              security definer
+              stable
+              as $$
+                select coalesce(array_agg(tenant_id), '{}')
+                from public.memberships
+                where user_id = (select auth.uid())
+              $$
+            `;
+
+          // SELECT policy: subscribe-time gate. User can join a topic shaped
+          // `tenant:<uuid>:audit-feed` iff they're a member of that tenant.
+          await sql`
+              create policy "tenant members can subscribe to audit feed"
+                on realtime.messages for select
+                to authenticated
+                using (
+                  (string_to_array(realtime.topic(), ':'))[1] = 'tenant'
+                  and ((string_to_array(realtime.topic(), ':'))[2])::uuid = any (public.user_tenant_ids())
+                )
+            `;
+
+          // INSERT policy: send-time gate. Same shape — user can broadcast
+          // to a tenant feed iff they're a member.
+          await sql`
+              create policy "tenant members can broadcast to audit feed"
+                on realtime.messages for insert
+                to authenticated
+                with check (
+                  (string_to_array(realtime.topic(), ':'))[1] = 'tenant'
+                  and ((string_to_array(realtime.topic(), ':'))[2])::uuid = any (public.user_tenant_ids())
+                )
+            `;
 
           // ---------- Two real users + JWTs ----------
           const branchProjectRef = branch.project_ref ?? details.ref;
@@ -158,6 +213,21 @@ describe.skipIf(!SHOULD_RUN)("multi-tenant RLS smoke (real branch, two tenants)"
           }
           const jwtA = sessionA.session.access_token;
           console.log(`[smoke] JWT A obtained (length=${jwtA.length})`);
+
+          // Sign in user B too — needed for layer-2 (broadcast auth) where
+          // B attempts a cross-tenant injection under their own JWT.
+          const authClientB = createClient(supabaseUrl, anon, {
+            auth: { persistSession: false, autoRefreshToken: false },
+          });
+          const { data: sessionB, error: signinBErr } = await authClientB.auth.signInWithPassword({
+            email: emailB,
+            password: passwordB,
+          });
+          if (signinBErr || !sessionB.session) {
+            throw new Error(`signIn B failed: ${signinBErr?.message}`);
+          }
+          const jwtB = sessionB.session.access_token;
+          console.log(`[smoke] JWT B obtained (length=${jwtB.length})`);
 
           // ---------- Subscribe under JWT A's identity ----------
           // Pass anon as supabaseKey + JWT_A as authToken — mirrors the
@@ -265,6 +335,140 @@ describe.skipIf(!SHOULD_RUN)("multi-tenant RLS smoke (real branch, two tenants)"
           expect(ownTenantEvents.length).toBeGreaterThanOrEqual(1);
 
           for (const t of insertTimers) clearTimeout(t);
+
+          // ===================================================================
+          // LAYER 2 — Broadcast Authorization RLS (ADR-0013)
+          //
+          // Same branch, same users. Pre-fix the MCP primitives
+          // (makeSupabaseBroadcastAdapter, handleBroadcast) construct
+          // channels WITHOUT `private: true`, so realtime.messages RLS is
+          // bypassed and B's cross-tenant injection leaks to A's listener.
+          // Post-fix the `private` flag is threaded through both legs and
+          // the substrate enforces.
+          //
+          // Test code is identical pre-fix and post-fix — zod's default
+          // strips unknown fields, so passing `private: true` in the input
+          // is silently ignored pre-fix and respected post-fix. The
+          // production code is what changes; the test is the gate.
+          // ===================================================================
+
+          const audit_topic = `tenant:${tenantA}:audit-feed`;
+
+          // A's listener: subscribe to A's tenant audit feed via the
+          // production primitive. Pre-fix: public channel (no RLS gate at
+          // subscribe). Post-fix: private channel (subscribe RLS evaluated;
+          // A passes because A is a member of tenant_a).
+          const broadcastAdapterA = makeSupabaseBroadcastAdapter({
+            supabaseUrl,
+            supabaseKey: anon,
+            authToken: jwtA,
+            subscribeTimeoutMs: 15_000,
+          });
+
+          const subscribePromise = boundedSubscribe({
+            adapter: broadcastAdapterA,
+            channel: audit_topic,
+            timeout_ms: 20_000,
+            max_events: 5,
+            private: true,
+          });
+
+          // Give A's subscribe a moment to ack SUBSCRIBED before either
+          // sender fires. boundedSubscribe doesn't expose a "subscribed"
+          // signal; relying on the documented Realtime warmup window.
+          await new Promise((r) => setTimeout(r, 6_000));
+
+          // A's authorized broadcast: build a sender that mirrors the
+          // production server.ts shape, parameterized by JWT. Pre-fix:
+          // public channel, send goes through. Post-fix: private channel,
+          // send goes through (A is a member). Both runs: A receives.
+          // Sender factory: mirrors the production server.ts shape but
+          // parameterized by JWT. Uses httpSend (post-ADR-0013) so the
+          // sender exercises the same REST-side path the production
+          // handler uses, threading the `private` flag at channel
+          // construction time.
+          const buildSender = (jwt: string): BroadcastSender => {
+            return {
+              send: async (input) => {
+                const senderClient = createClient(supabaseUrl, anon, {
+                  auth: { persistSession: false, autoRefreshToken: false },
+                });
+                senderClient.realtime.setAuth(jwt);
+                const ch = input.private
+                  ? senderClient.channel(input.channel, { config: { private: true } })
+                  : senderClient.channel(input.channel);
+                try {
+                  await ch.httpSend(input.event, input.payload, { timeout: 10_000 });
+                } finally {
+                  await senderClient.removeChannel(ch);
+                }
+                return { status: "ok" };
+              },
+            };
+          };
+
+          const senderA = buildSender(jwtA);
+          const senderB = buildSender(jwtB);
+
+          // A's authorized send: should be received by A's listener.
+          await handleBroadcast(
+            {
+              channel: audit_topic,
+              event: "own",
+              payload: { from: "A" },
+              private: true,
+            },
+            { sender: senderA },
+          );
+          console.log("[smoke] A's authorized broadcast sent");
+
+          // B's cross-tenant injection: pre-fix succeeds and leaks to A;
+          // post-fix rejected by realtime.messages INSERT policy. We catch
+          // because handleBroadcast retries 3× then throws ToolError.
+          let bInjectionThrew = false;
+          try {
+            await handleBroadcast(
+              {
+                channel: audit_topic,
+                event: "injection",
+                payload: { from: "B" },
+                private: true,
+              },
+              { sender: senderB },
+            );
+            console.log("[smoke] B's cross-tenant broadcast send returned (NO error)");
+          } catch (err) {
+            bInjectionThrew = true;
+            console.log(
+              `[smoke] B's cross-tenant broadcast threw (expected post-fix): ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+
+          // Wait for any pending broadcasts to flush to A's listener.
+          await new Promise((r) => setTimeout(r, 4_000));
+
+          const subscribeResult = await subscribePromise;
+          const ownBroadcasts = subscribeResult.broadcasts.filter((b) => b.event === "own");
+          const injectionBroadcasts = subscribeResult.broadcasts.filter(
+            (b) => b.event === "injection",
+          );
+          console.log(
+            `[smoke] layer 2 summary: own_broadcasts=${ownBroadcasts.length}, injection_broadcasts=${injectionBroadcasts.length}, b_injection_threw=${bInjectionThrew}`,
+          );
+
+          // Assertion (c) — DIAGNOSTIC: A receives A's own authorized
+          // broadcast. Both pre-fix and post-fix should pass; if it fails
+          // pre-fix the smoke harness is broken in some unrelated way; if
+          // it fails post-fix the realtime.messages SELECT policy isn't
+          // admitting A.
+          expect(ownBroadcasts.length).toBeGreaterThanOrEqual(1);
+
+          // Assertion (d) — CONTRACT: B's cross-tenant injection MUST NOT
+          // reach A's listener. FAILS pre-fix (public channels skip RLS,
+          // injection leaks); PASSES post-fix (substrate rejects at the
+          // INSERT policy on realtime.messages, B's send throws, nothing
+          // delivered to A).
+          expect(injectionBroadcasts).toHaveLength(0);
         } finally {
           await sql.end();
         }
