@@ -13,14 +13,11 @@ Operator setup for running the `supabase-realtime` MCP server on Supabase Edge F
 ```bash
 # From your fork of supabase-realtime-skill
 supabase functions deploy --no-verify-jwt mcp --project-ref <your-ref>
-
-# Set required env vars
-supabase secrets set --project-ref <your-ref> \
-  SUPABASE_URL=https://<your-ref>.supabase.co \
-  SUPABASE_ANON_KEY=<anon-key>
 ```
 
 The function is now live at `https://<your-ref>.supabase.co/functions/v1/mcp`.
+
+`SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_DB_URL` are auto-injected by the Edge Functions runtime — they're reserved (read-only via `Deno.env.get`, not settable via `supabase secrets set`). If your fork needs additional secrets (custom OAuth keys, third-party API tokens), use `supabase secrets set --project-ref <your-ref> KEY=VALUE` for those.
 
 ### Why `--no-verify-jwt`
 
@@ -42,10 +39,13 @@ Raw is chosen for the v1.0 ship — the transport doesn't care which framework w
 ```bash
 curl -i https://<your-ref>.supabase.co/functions/v1/mcp/health \
   -H "Authorization: Bearer <anon-key>" \
+  -H "apikey: <anon-key>" \
   -H "Accept: text/plain"
 ```
 
 Expected: `200 OK` with body `supabase-realtime-skill MCP — ok`.
+
+The `apikey` header is what the platform gateway accepts for content-negotiation passthrough; without it, the gateway returns 406 because the MCP transport advertises `text/event-stream` by default. With `--no-verify-jwt` set, both headers' contents are not verified — but the gateway still requires `apikey` to be present.
 
 For a full end-to-end check (`tools/list` + `tools/call` round-trips), run the smoke suite:
 
