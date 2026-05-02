@@ -32,6 +32,9 @@
 // after branch is up. Skips when EVAL_SUPABASE_PAT / EVAL_HOST_PROJECT_REF
 // missing.
 
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
@@ -69,90 +72,19 @@ describe.skipIf(!SHOULD_RUN)("multi-tenant RLS smoke (real branch, two tenants)"
         const sql = postgres(dbUrl, { max: 1, prepare: false });
 
         try {
-          // ---------- Schema with RLS ----------
-          // memberships table: user ↔ tenant. RLS policy: users see own
-          // memberships only.
-          await sql`
-              create table memberships (
-                user_id uuid references auth.users(id) on delete cascade,
-                tenant_id uuid not null,
-                primary key (user_id, tenant_id)
-              )
-            `;
-          await sql`alter table memberships enable row level security`;
-          await sql`
-              create policy "users see own memberships" on memberships
-                for select to authenticated
-                using (user_id = (select auth.uid()))
-            `;
-
-          // audit_events table: tenant-scoped. RLS policy: authenticated
-          // users see only events for tenants they are a member of. NO
-          // policy for anon — under the bug (anon claims_role on websocket),
-          // anon will see nothing and assertion (a) below will FAIL.
-          await sql`
-              create table audit_events (
-                id uuid primary key default gen_random_uuid(),
-                tenant_id uuid not null,
-                event_type text not null,
-                payload jsonb not null default '{}',
-                created_at timestamptz not null default now()
-              )
-            `;
-          await sql`create index on audit_events (tenant_id)`;
-          await sql`alter table audit_events enable row level security`;
-          await sql`
-              create policy "tenant members can read audit_events" on audit_events
-                for select to authenticated
-                using (
-                  tenant_id in (
-                    select tenant_id from memberships where user_id = (select auth.uid())
-                  )
-                )
-            `;
-          await sql`alter publication supabase_realtime add table audit_events`;
-
-          // ---------- Layer 2 setup: realtime.messages RLS for Broadcast Auth ----------
-          // Helper: tenant_ids the JWT identity is a member of. SECURITY
-          // DEFINER STABLE so the membership lookup is evaluated once per
-          // connection (cached), not per message. This is the canonical
-          // pattern documented in references/multi-tenant-rls.md.
-          await sql`
-              create or replace function public.user_tenant_ids()
-              returns uuid[]
-              language sql
-              security definer
-              stable
-              as $$
-                select coalesce(array_agg(tenant_id), '{}')
-                from public.memberships
-                where user_id = (select auth.uid())
-              $$
-            `;
-
-          // SELECT policy: subscribe-time gate. User can join a topic shaped
-          // `tenant:<uuid>:audit-feed` iff they're a member of that tenant.
-          await sql`
-              create policy "tenant members can subscribe to audit feed"
-                on realtime.messages for select
-                to authenticated
-                using (
-                  (string_to_array(realtime.topic(), ':'))[1] = 'tenant'
-                  and ((string_to_array(realtime.topic(), ':'))[2])::uuid = any (public.user_tenant_ids())
-                )
-            `;
-
-          // INSERT policy: send-time gate. Same shape — user can broadcast
-          // to a tenant feed iff they're a member.
-          await sql`
-              create policy "tenant members can broadcast to audit feed"
-                on realtime.messages for insert
-                to authenticated
-                with check (
-                  (string_to_array(realtime.topic(), ':'))[1] = 'tenant'
-                  and ((string_to_array(realtime.topic(), ':'))[2])::uuid = any (public.user_tenant_ids())
-                )
-            `;
+          // Apply the demo migration as setup. Single source of truth: the
+          // migration file is what consumers `supabase db push`; the smoke
+          // test runs the same SQL. Pre-ADR-0014 this block was an inline
+          // schema definition that drifted independently of any published
+          // artifact — see ADR-0014 § "Demo migration / smoke test
+          // divergence" for the rationale.
+          const __filename = fileURLToPath(import.meta.url);
+          const migrationPath = join(
+            dirname(__filename),
+            "../../supabase/migrations/20260502000001_multi_tenant_audit_demo.sql",
+          );
+          const migrationSql = await readFile(migrationPath, "utf-8");
+          await sql.unsafe(migrationSql);
 
           // ---------- Two real users + JWTs ----------
           const branchProjectRef = branch.project_ref ?? details.ref;

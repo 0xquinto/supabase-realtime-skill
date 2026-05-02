@@ -68,6 +68,18 @@ export interface BoundedQueueDrainInput {
   /** Same broadcast sender shape handleBroadcast uses elsewhere. */
   sender: BroadcastSender;
 
+  /**
+   * When true, broadcasts are sent on a private channel — substrate
+   * evaluates `realtime.messages` INSERT policy before fan-out (see
+   * ADR-0013 + references/multi-tenant-rls.md). Default false preserves
+   * v0.1.x behavior. The forward leg of a tenant-scoped audit log →
+   * tenant-private channel composition is the canonical use case
+   * (ADR-0014). Note: Postgres-Changes RLS on the source table is
+   * enforced separately via the adapter's authToken — `private` here
+   * gates only the broadcast leg.
+   */
+  private?: boolean;
+
   /** Timeout for the bounded drain pass. Forwarded to boundedWatch. */
   timeout_ms: number;
 
@@ -133,7 +145,12 @@ export async function boundedQueueDrain(
     let broadcastError: unknown = null;
     try {
       await handleBroadcast(
-        { channel: row.destination, event: row.event, payload: row.payload },
+        {
+          channel: row.destination,
+          event: row.event,
+          payload: row.payload,
+          private: input.private ?? false,
+        },
         { sender: input.sender },
       );
     } catch (err) {

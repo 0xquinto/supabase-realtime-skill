@@ -1,0 +1,134 @@
+# ADR-0014: Worked-example ship — demo migration + npm `0.2.0` + manifest-cell deferral
+
+**Status:** Proposed (filed alongside the implementation it carries; ADR status discipline says don't promote to Accepted until the operator decides — see `CLAUDE.md` § "ADR status discipline").
+
+**Date:** 2026-05-02
+
+**Supersedes:** none. **Composes on top of:** ADR-0011 (Postgres-Changes RLS substrate fix), ADR-0012 (substrate-vs-composition split rationale), ADR-0013 (Broadcast Authorization substrate fix).
+
+**Related recon:** [`docs/recon/2026-05-02-worked-example-ship-recon.md`](../recon/2026-05-02-worked-example-ship-recon.md). The recon's six explicit decisions are commited on below.
+
+## Context
+
+ADR-0012 § 2 named the substrate-vs-composition split: substrate-correctness fixes ship with smoke-test receipts on real branches; fixture-driven gates ship with the worked example. ADRs 0011 + 0013 honored the first half — both gaps closed, both with FAIL→fix→PASS receipts on real Pro branches. The second half (the worked example with its associated migration, npm release, and contingent manifest cell) was deferred to *this* ADR.
+
+Three things were *guaranteed* to land here per ADR-0012 + ADR-0013:
+
+1. The smoke-test schema (currently constructed inline in `tests/smoke/multi-tenant-rls.smoke.test.ts`) must be promoted to a permanent migration so consumers reading the README have a published surface to apply.
+2. The npm package must bump (additive change since `0.1.x`: the `private` flag, the `^2.88.0` floor, the demo migration). This is the worked example's external surface.
+3. The `cross_tenant_leakage_rate_max` manifest cell must either ship with a defensible adversarial corpus, or be explicitly deferred with rationale.
+
+Plus one open question ADR-0013 deferred: whether `boundedQueueDrain` (the composed primitive) should also accept a `private` flag for its broadcast leg.
+
+The recon at [`docs/recon/2026-05-02-worked-example-ship-recon.md`](../recon/2026-05-02-worked-example-ship-recon.md) ran a delta analysis against the prior recons and one external probe (the supabase-js floor). Headline external finding: ADR-0013's `^2.88.0` floor is 17 minor versions stale (current stable 2.105.1 as of 2026-04-28); a previously-suspected redundancy with #2136 (2.98.0) turned out to be a different gap (RN/Expo async-storage scoped, no-op on browsers / Edge). ADR-0011's manual `setAuth` discipline remains load-bearing.
+
+## Decisions
+
+### 1. Demo migration scope — schema + policies + helper
+
+**Ship (b):** the migration carries `memberships` + `audit_events` tables, the `public.user_tenant_ids()` SECURITY DEFINER STABLE helper, and the two `realtime.messages` RLS policies (subscribe-time SELECT + send-time INSERT). One file, one `supabase db push` instantiates the worked example end-to-end.
+
+Rejected (a) "schema only, leave `realtime.messages` policies separate" because shipping an incomplete worked example would force every consumer to copy-paste the policies from the reference page. Rejected (c) "schema + sample data" because the policy layer is canonical but sample data is consumer-specific.
+
+**File:** `supabase/migrations/20260502000001_multi_tenant_audit_demo.sql`. Naming follows the existing `support_tickets` migration's date-prefix convention.
+
+### 2. `@supabase/supabase-js` floor — bracket `>=2.88.0 <3.0.0` (γ)
+
+**Hold the floor at `^2.88.0`.** In npm caret semantics, `^2.88.0` resolves to `>=2.88.0 <3.0.0` — exactly the (γ) bracket the recon's tilt favored. No package.json change.
+
+The trade-off: (β) bumping to `^2.105.x` would have advertised "verified on latest" at the cost of producing a *new* smoke-receipt artifact for an ADR whose load-bearing receipts already exist on 2.88.x; the receipt would age one minor at a time as supabase-js continues releasing. (γ) is honest about what's verified (the lower bound) and mechanical about the upper bound (v3 is staging).
+
+This decision admits the v0.1.x → v0.2.0 release ships the same supabase-js floor that ADR-0013 pinned 16 days earlier. New consumers will resolve to the latest matching minor regardless; we just don't *claim* to have re-verified above 2.88.0.
+
+If a future smoke-test re-run on 2.105.x is run (cheap — one Pro branch, ~5min), this ADR's body should be amended with the receipt and the floor optionally tightened. Until then: (γ) holds.
+
+### 3. `cross_tenant_leakage_rate_max` manifest cell — **deferred**
+
+**Defer with rationale.** Mirrors ADR-0012 § 2's substrate-vs-composition discipline. The substrate-correctness fixes (ADRs 0011 + 0013) already shipped with smoke-test receipts on real Pro branches; rolling a fixture-driven manifest cell into this ADR would:
+
+- **Mix evidence regimes** — the substrate ship is proven by one binary smoke pass per RLS layer; the manifest cell would gate on n=100 / n=300 fixture-pair runs. Co-shipping conflates the two.
+- **Risk a proxy gap** — adversarial fixtures generated by LLM augmentation in this domain are likely to all converge on the same shape (pair of tenants, A subscribes, B injects, assert no leakage). 100 such fixtures don't cover 100 scenarios; they cover one scenario 100 times. The construct-validity playbook target ([`playbook/research/construct-validity.md`](../../playbook/research/construct-validity.md) Target 4) names this trap.
+- **Push the ship** — fixture-design is a real pass that needs hand-curation + an Exa research probe on adversarial-corpus design. None of that work is started.
+
+A future ADR can revisit when (and if) a defensible adversarial corpus exists. Per ADR-0012 § 2: deferral is not a failure.
+
+### 4. `boundedQueueDrain` `private` threading — **thread it through**
+
+**Add `private?: boolean` to `BoundedQueueDrainInput`** (`src/server/queue-drain.ts`); forward to the inner `handleBroadcast` call as `private: input.private ?? false`. Closes ADR-0013's open question.
+
+The reasoning: the canonical worked-example flow is "tenant-scoped queue (Postgres-Changes RLS at source) → tenant-private channel (Broadcast Authorization RLS at sink)." Without the threading, a consumer composing `boundedQueueDrain` to drive that flow would silently broadcast on a public channel (the `private` default is `false`), bypassing the substrate gate even though their source-side reads are RLS-enforced. Threading the flag is a one-line change with an additive default; the worked example uses it; the alternative is footgun-shaped.
+
+Note: Postgres-Changes RLS on the source table is enforced separately via the adapter's `authToken`. The `private` parameter on `boundedQueueDrain` gates only the broadcast leg.
+
+### 5. npm bump shape — bundled `0.2.0`
+
+**Single PR bumps `0.1.1` → `0.2.0`** with all of: the demo migration (Decision 1), the `private` threading on `boundedQueueDrain` (Decision 4), the existing `private` flag from ADR-0013 (already on `main`), and a new `CHANGELOG.md` (introduced this release). Floor stays at `^2.88.0` (Decision 2 / γ).
+
+Rejected (ii) "split into two minor releases" because the worked example IS the headline of `0.2.0`; splitting just creates two smaller releases that each carry less story. The handoff's own recommendation is the same.
+
+### 6. Worked-example shape — confirmed (a) audit-log
+
+**Confirm (a) multi-tenant audit log → tenant-private broadcast channel** as the worked-example shape, locked in by both ADR-0011 + ADR-0013 receipts shipping against exactly that schema. (b) collaborative editing and (c) outbox-to-Slack remain unselected; ADR-0014 doesn't reopen them. Revisiting now would invalidate the receipts.
+
+## Implementation status (added 2026-05-02)
+
+Filed **Proposed**. The implementation lands in the same PR as this ADR per the ADR-0011 / ADR-0013 pattern (substrate ship + ADR + smoke receipts arrive together; ADR-0012 was the exception because it was a pure deferral with no implementation). All six decisions are implemented:
+
+- Demo migration: `supabase/migrations/20260502000001_multi_tenant_audit_demo.sql` — schema + helper + policies, transcribed from the smoke test (which now applies this file as setup, closing the divergence risk the recon § "Where design risk concentrates" (3) named).
+- supabase-js floor: `^2.88.0` unchanged in `package.json`. ADR commits (γ).
+- Manifest cell: not added; this section is the deferral receipt.
+- `boundedQueueDrain` `private`: added in `src/server/queue-drain.ts`. Default `false`; documentation comments call out the substrate-vs-source split.
+- npm bump: `package.json` `version` `0.1.1` → `0.2.0`.
+- CHANGELOG: new file at repo root with retroactive 0.1.0 / 0.1.1 stubs + the 0.2.0 entry.
+
+**Smoke-test refactor.** `tests/smoke/multi-tenant-rls.smoke.test.ts` previously constructed the schema inline; now reads `20260502000001_multi_tenant_audit_demo.sql` and applies it via `sql.unsafe(...)`. The smoke test and the published migration are now the same SQL — same FAIL→fix→PASS receipts apply, no risk of silent drift.
+
+**Smoke receipts on the new floor.** Not produced. The recon's (γ) tilt consciously trades "verified on latest" for "honest about drift"; running smoke tests on the upgraded supabase-js minor is a future option, not a prerequisite for this ship. ADR-0011 + ADR-0013 receipts on 2.88.0 remain the canonical evidence.
+
+## Predicted effect
+
+Per playbook § 8, no recommendation without a falsifiable predicted effect. ADR-0014 is a *composition* ship (substrate-correctness was already proven). The predicted effect matches the composition phenomenon, not the substrate:
+
+> **An external consumer of `supabase-realtime-skill@0.2.0` who runs `supabase db push` with the v0.2.0 demo migration applied, then invokes `boundedQueueDrain` with `private: true` against two tenants (A, B), observes zero cross-tenant leakage at the broadcast leg in the steady-state run.**
+
+Properties:
+- **Smoke-test-shaped, not fixture-shaped.** The existing multi-tenant smoke test already asserts this; ADR-0014's job was to make the assertion reproducible from the published artifact (migration + npm package). It now is.
+- **Falsifiable in two named directions.** If the migration is incomplete (missing helper or policy), the post-fix smoke test fails. If the npm package's `private` threading is wrong (zod schema doesn't carry the field, or `boundedQueueDrain` doesn't forward it), leakage shows up under `boundedQueueDrain`.
+- **No new fixture corpus** — the manifest cell is deferred per Decision 3.
+
+The predicted effect is the *substrate-correctness assertion at the composition surface*, not a quality-of-LLM-decisions assertion. Substrate-vs-composition split holds.
+
+## Where design risk concentrates
+
+1. **Smoke-test divergence (closed).** The recon flagged this as risk (3); the implementation closes it by having the smoke test load the migration file rather than re-define the schema inline.
+2. **Floor staleness signal to consumers (open, accepted).** Holding at `^2.88.0` means consumers reading `package.json` see a 2025-12 floor on a 2026-05 release. The trade-off is documented in Decision 2 + the CHANGELOG. A future smoke-test pass on 2.105.x can amend this ADR's body and tighten the floor; until then, the (γ) framing stands.
+3. **`boundedQueueDrain` `private` is silent if caller doesn't opt in (open, accepted).** A consumer composing `boundedQueueDrain` without setting `private: true` broadcasts publicly, even though their source-side reads are RLS-enforced. The reference page (`references/multi-tenant-rls.md`) calls this out; ADR-0013 § "Backward-compat" reasoning applies (additive default preserves callers, opt-in for the safer shape).
+4. **Manifest-cell deferral is operator-visible.** Naming it explicitly in the CHANGELOG + this ADR makes the deferral *receipted*, not silent. Future contributors who want to ship the cell have a clean entry point (revisit § "Decision 3").
+5. **No upstream PR yet on `supabase/agent-skills`.** T31 / ADR-0004 remain operator decisions; ADR-0014 doesn't touch them. Independent ship.
+
+## Deferrals (explicit)
+
+The following are *not* in `0.2.0` and are deferred with rationale:
+
+- **`cross_tenant_leakage_rate_max` manifest cell** — Decision 3. Future ADR revisits when adversarial corpus design is started.
+- **Smoke-test re-run on supabase-js 2.105.x** — Decision 2 / open question. Cheap when run; can amend this ADR's "Implementation status" block and tighten the floor.
+- **`boundedWatch` `private` threading for symmetry** — recon's open question; declined here. Postgres-Changes RLS doesn't use the `private` flag; advertising a knob with no effect on that leg would confuse the contract.
+- **MCP `inputSchema` JSON for `boundedQueueDrain`'s `private` parameter** — `boundedQueueDrain` is a deterministic *module*, not an MCP tool; no `tools/list` entry to update. The `private` flag *is* advertised on `BroadcastInput` + `SubscribeChannelInput` (ADR-0013) which are the MCP tool surfaces.
+- **README update with "see the demo" pointer** — out of scope for the ADR, can land on the same PR or as a follow-up. The CHANGELOG carries the migration link in the meantime.
+
+## References
+
+**Internal:**
+- [`docs/recon/2026-05-02-worked-example-ship-recon.md`](../recon/2026-05-02-worked-example-ship-recon.md) — pre-ADR recon; commits PR #9 to `main` carry the receipts of this work's design pass.
+- [`docs/decisions/0011-multi-tenant-rls-baseline.md`](0011-multi-tenant-rls-baseline.md) — Postgres-Changes RLS substrate fix; receipts on Pro branches.
+- [`docs/decisions/0012-multi-tenant-audit-log-example.md`](0012-multi-tenant-audit-log-example.md) — substrate-vs-composition split § 2; canonical writeup of the deferral discipline this ADR applies to Decision 3.
+- [`docs/decisions/0013-private-channel-broadcast-authorization.md`](0013-private-channel-broadcast-authorization.md) — Broadcast Authorization substrate fix + `httpSend` migration + supabase-js floor pin; this ADR closes its open question on `boundedQueueDrain` threading.
+- [`references/multi-tenant-rls.md`](../../references/multi-tenant-rls.md) — operator deep dive; the demo migration is the SQL backing this page's policies.
+- [`tests/smoke/multi-tenant-rls.smoke.test.ts`](../../tests/smoke/multi-tenant-rls.smoke.test.ts) — smoke gate; refactored to apply the migration.
+- [`supabase/migrations/20260502000001_multi_tenant_audit_demo.sql`](../../supabase/migrations/20260502000001_multi_tenant_audit_demo.sql) — the migration this ADR ships.
+- [`CHANGELOG.md`](../../CHANGELOG.md) — release log, introduced this version.
+- [`playbook/research/construct-validity.md`](../../playbook/research/construct-validity.md) Target 4 — proxy-gap discipline cited in Decision 3.
+
+**External:**
+- [supabase-js CHANGELOG](https://raw.githubusercontent.com/supabase/supabase-js/master/CHANGELOG.md) — basis for Decision 2's drift analysis.
+- [Anthropic — Writing tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents) — additive-tool-versioning convention.
