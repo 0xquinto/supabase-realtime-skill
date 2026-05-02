@@ -4,7 +4,7 @@ Pre-ADR recon for what I called the "highest-leverage single thing" in the v1.0.
 
 The headline finding inverts the framing:
 
-> **The routing code is already wired** in `src/server/server.ts:175-260` (a `CallToolRequestSchema` switch covering all five tools). What's not verified is `tools/call` against the *deployed* function on real Edge runtime — only `tools/list` (a metadata round-trip) has been live-checked. Plus the deployed function pins `@supabase/supabase-js@2.45.0` in `supabase/functions/mcp/deno.json`, which is *60 minor versions stale* against the npm package's `^2.88.0` floor (and the production code paths use `httpSend()` which doesn't exist below 2.75.0).
+> **The routing code is already wired** in `src/server/server.ts:188-247` (a `CallToolRequestSchema` switch covering all five tools). What's not verified is `tools/call` against the *deployed* function on real Edge runtime — only `tools/list` (a metadata round-trip) has been live-checked. Plus the deployed function pins `@supabase/supabase-js@2.45.0` in `supabase/functions/mcp/deno.json`: 43 minor versions behind the npm package's `^2.88.0` floor, 60 behind latest stable (2.105.1). Production code paths use `httpSend()`, added in 2.75.0 (Oct 2025) — the deployed runtime literally cannot execute `broadcast_to_channel`'s production sender.
 
 So "Edge Function tool-routing" isn't an *implementation* gap — it's a *verification* gap and a *dependency-currency* gap. Different kind of work than the headline suggests.
 
@@ -18,11 +18,11 @@ Three questions this recon has to answer before any drafting:
 
 1. **What's actually verified end-to-end on the deployed runtime today?** Live `tools/list` only, per `tests/smoke/edge-deploy.smoke.test.ts` and commit `9abd676`. No `tools/call` smoke against the live function exists.
 2. **Is the deployed function running the same code paths as npm consumers?** No. `deno.json` pins `npm:@supabase/supabase-js@2.45.0`; npm package floor is `^2.88.0`. The deployed runtime cannot exercise `httpSend()` (added 2.75.0) which is what `broadcast_to_channel` uses in production code.
-3. **Is the architectural pattern blessed by Supabase, or rolled-our-own?** Mostly blessed. Supabase shipped an official "Build and deploy MCP servers" guide on **2026-04-30** (two days ago) using the same `WebStandardStreamableHTTPServerTransport` we use. They wrap with Hono; we use raw `Deno.serve`. Both work; theirs is the documented path.
+3. **Is the architectural pattern blessed by Supabase, or rolled-our-own?** Mostly blessed. Supabase shipped an official "Build and deploy MCP servers" guide (verified live 2026-05-02) using the same `WebStandardStreamableHTTPServerTransport` we use. They wrap with Hono; we use raw `Deno.serve`. Both work; theirs is the documented path.
 
 ## Internal recon
 
-### Tool routing IS wired — `src/server/server.ts:175-260`
+### Tool routing IS wired — `src/server/server.ts:188-247`
 
 `makeServer()` registers two request handlers on the `Server` instance: `ListToolsRequestSchema` (returns `TOOL_DEFS` with five entries) and `CallToolRequestSchema` (a switch over `req.params.name` covering `watch_table`, `broadcast_to_channel`, `subscribe_to_channel`, `list_channels`, `describe_table_changes`). Each case wires to the corresponding handler module — `handleWatchTable`, `handleBroadcast`, etc. The `default` case throws `ToolError("UPSTREAM_ERROR", "unknown tool: ${name}")`.
 
@@ -38,7 +38,7 @@ Two `it()` blocks:
 
 Neither block calls `tools/call`. The README's "live-verified" claim covers *transport reachability + tool-list metadata round-trip*, not actual tool execution end-to-end.
 
-### `deno.json` is 60 minor versions stale
+### `deno.json` is 43 minors behind floor, 60 behind latest stable
 
 ```json
 "@supabase/supabase-js": "npm:@supabase/supabase-js@2.45.0"
@@ -49,10 +49,10 @@ vs. `package.json`'s `"@supabase/supabase-js": "^2.88.0"`. The Edge Function dep
 Specific code paths broken at 2.45.0:
 
 - **`broadcast_to_channel`** uses `makeProductionBroadcastSender` which calls `ch.httpSend(...)` (added supabase-js 2.75.0, Oct 2025). On 2.45.0, `httpSend` doesn't exist; the call throws at runtime.
-- **`watch_table`** subscribes to Postgres-Changes via the websocket. The premature-`SUBSCRIBED` fix ([supabase-js#2029](https://github.com/supabase/supabase-js/pull/2029), shipped ~2.94.0 Jan 2026) means events fired in the first 1-3s after `SUBSCRIBED` are silently missed. Pre-fix, the bug bites — and the deployed function is *2.45.0* pre-fix.
-- **The Authorization header empty-string bug** ([#1937](https://github.com/supabase/supabase-js/pull/1937), fixed 2.88.0) bites if the agent's JWT is missing, which it shouldn't be in production but does happen in dev.
+- **`watch_table`** subscribes to Postgres-Changes via the websocket. The premature-`SUBSCRIBED` warm-up window we documented as T7 in `spike-findings.md` is tracked upstream as [supabase-js#1599](https://github.com/supabase/supabase-js/issues/1599) with a candidate fix at [PR #2029](https://github.com/supabase/supabase-js/pull/2029). **PR #2029 is OPEN as of 2026-05-02 (not merged at any 2.x version);** the bug is unfixed at upstream HEAD. Bumping the deno.json pin doesn't fix this — but keeps us aligned with the upstream once the fix lands. The smoke-test multi-insert pattern + `eval/spike-latency.ts` warmup-discard remain load-bearing in the meantime.
+- **The Authorization header empty-string bug** ([#1937](https://github.com/supabase/supabase-js/pull/1937), MERGED at 2.88.0, Dec 2025) bites if the agent's JWT is missing, which it shouldn't be in production but does happen in dev.
 
-This isn't theoretical — it's a *guaranteed silent failure* for any consumer who deploys the current `supabase/functions/mcp/index.ts` and calls `broadcast_to_channel` from an agent.
+The `httpSend()` gap is *not theoretical* — it's a guaranteed silent failure for any consumer who deploys the current `supabase/functions/mcp/index.ts` and calls `broadcast_to_channel` from an agent. The Authorization-header fix is a defensive bonus. The premature-SUBSCRIBED issue stays open and is unaffected by this work.
 
 ### `references/edge-deployment.md` carries one drift artifact
 
@@ -79,9 +79,9 @@ Today the deployed function consumes the source tree, not the npm package. The "
 
 External sweep via Exa over MCP-on-Supabase-Edge production patterns, `WebStandardStreamableHTTPServerTransport` deployments, and supabase-js Realtime/Edge interop history. Headlines below; primary sources cited inline.
 
-### 1. Supabase has a NEW official "Build and deploy MCP servers" guide (2026-04-30)
+### 1. Supabase has an official "Build and deploy MCP servers" guide
 
-**Headline:** [Supabase docs — "Deploy MCP servers"](https://supabase.com/docs/guides/getting-started/byo-mcp), published 2026-04-30 (two days before this recon). The canonical pattern. Uses the same `WebStandardStreamableHTTPServerTransport` we use, with one architectural difference (Hono wrapper) and one auth caveat (`--no-verify-jwt` required).
+**Headline:** [Supabase docs — "Deploy MCP servers"](https://supabase.com/docs/guides/getting-started/byo-mcp), verified live 2026-05-02 (recent, exact publish date not visible from the page). The canonical pattern. Uses the same `WebStandardStreamableHTTPServerTransport` we use, with one architectural difference (Hono wrapper) and one auth caveat (`--no-verify-jwt` required).
 
 The reference code from the docs:
 
@@ -125,13 +125,13 @@ Differences from our `supabase/functions/mcp/index.ts`:
 
 ### 3. Premature-SUBSCRIBED fix matters specifically for `watch_table`
 
-**Headline:** [supabase-js#1599](https://github.com/supabase/supabase-js/issues/1599) — "Premature SUBSCRIBED status for postgres_changes signals incorrect readiness." Filed Aug 2025. Fixed in [PR #2029](https://github.com/supabase/supabase-js/pull/2029) (Jan 2026, ~v2.94.0): "wait for postgres_changes system ready before emitting SUBSCRIBED."
+**Headline:** [supabase-js#1599](https://github.com/supabase/supabase-js/issues/1599) — "Premature SUBSCRIBED status for postgres_changes signals incorrect readiness." Filed Aug 2025. Candidate fix at [PR #2029](https://github.com/supabase/supabase-js/pull/2029) ("wait for postgres_changes system ready before emitting SUBSCRIBED") opened Jan 2026 — **OPEN as of 2026-05-02, not merged at any 2.x version**. The bug remains unfixed upstream at HEAD.
 
 The bug: client emits `SUBSCRIBED` after Stage 1 (Phoenix channel join, fast). Stage 2 (Realtime → Postgres → publication → replication slot, slow, several seconds) hadn't finished yet. INSERTs in the post-SUBSCRIBED-pre-stage-2-ready window were silently missed.
 
 **The same bug we pre-discovered as the "Realtime ~5s warm-up window"** in `docs/spike-findings.md` (T7) and worked around with the `eval/spike-latency.ts` adapter pattern. Our smoke tests use a multi-insert schedule for exactly this reason.
 
-**Implication:** at supabase-js 2.45.0 (current Edge pin), the bug is unfixed. Our Edge `watch_table` exhibits the warm-up-window behavior we documented as a "known operational finding" — but at 2.94.0+, it's *fixed at the substrate layer*. Bumping the Edge pin removes a real consumer-facing footgun. The 5s warm-up note in `spike-findings.md` would become "historical, fixed at supabase-js 2.94.0" rather than "current operational concern."
+**Implication:** the 5s warm-up bug is unfixed at every supabase-js 2.x version including 2.105.x. Our Edge `watch_table` exhibits the warm-up-window behavior; bumping the deno.json pin does NOT address this. The T7 5s-warm-up note in `spike-findings.md` stays current; the smoke-test multi-insert pattern + `eval/spike-latency.ts` warmup-discard pattern remain the load-bearing workaround. The recon raises this only as evidence that we and Supabase have the same understanding of the bug; the pin bump's rationale leans on `httpSend()` (genuinely added 2.75.0) and the empty-Authorization fix (#1937, genuinely merged 2.88.0), not on this still-open issue.
 
 ### 4. NAWA built a 1500-line production MCP server on Supabase Edge — five lessons
 
@@ -192,7 +192,7 @@ Properties:
 
 ## Where design risk concentrates
 
-1. **The deno.json bump is a 60-minor-version jump.** Same risk as the recon's prior § "supabase-js drift" — but worse, because we go from 2.45 (May 2024) to 2.105 (Apr 2026), almost 24 months. Realtime websocket internals refactored multiple times in that window (phoenix js refactor, default serializer 2.0.0, deferred disconnect, etc.). Smoke is the canonical regression gate.
+1. **The deno.json bump is a multi-year jump.** Same risk as the recon's prior § "supabase-js drift" — but worse, because we go from 2.45 (Jul 2024) to 2.105 (Apr 2026), ~21 months. Realtime websocket internals refactored multiple times in that window (phoenix js refactor, default serializer 2.0.0, deferred disconnect, etc.). Smoke is the canonical regression gate.
 
 2. **Hono adoption is a real dependency surface decision.** Adopting it would simplify routing but adds 50KB+ to the bundle and another version to track. Recon's tilt: stay raw. ADR commits.
 
@@ -235,15 +235,15 @@ These are recommendations, not decisions — ADR will be filed as **Proposed**, 
 - [`docs/recon/2026-05-02-worked-example-ship-recon.md`](2026-05-02-worked-example-ship-recon.md) — recon shape this doc mirrors; same delta-analysis pattern; first to surface the supabase-js drift.
 - [`docs/decisions/0011-multi-tenant-rls-baseline.md`](../decisions/0011-multi-tenant-rls-baseline.md) — substrate-correctness FAIL→fix→PASS pattern this recon imports.
 - [`docs/decisions/0014-worked-example-ship.md`](../decisions/0014-worked-example-ship.md) — npm `0.2.0` version stream; this recon proposes `0.3.0` as the v1.0 staging version.
-- [`src/server/server.ts:175-260`](../../src/server/server.ts) — the actually-wired CallToolRequestSchema switch; routing-is-wired evidence.
+- [`src/server/server.ts:188-247`](../../src/server/server.ts) — the actually-wired CallToolRequestSchema switch; routing-is-wired evidence.
 - [`supabase/functions/mcp/index.ts`](../../supabase/functions/mcp/index.ts) — Edge Function entry; needs the npm-package import swap + `--no-verify-jwt` rationale.
-- [`supabase/functions/mcp/deno.json`](../../supabase/functions/mcp/deno.json) — supabase-js pin at 2.45.0 (60 minor versions stale).
+- [`supabase/functions/mcp/deno.json`](../../supabase/functions/mcp/deno.json) — supabase-js pin at 2.45.0 (43 minors behind floor; 60 behind latest stable).
 - [`tests/smoke/edge-deploy.smoke.test.ts`](../../tests/smoke/edge-deploy.smoke.test.ts) — current verification scope (`tools/list` only); the smoke extension target.
 - [`references/edge-deployment.md`](../../references/edge-deployment.md) — operator-facing reference; carries `"transport pending"` drift artifact.
-- [`docs/spike-findings.md`](../../docs/spike-findings.md) — T7 5s warm-up note; would be reframed as "fixed at supabase-js 2.94.0" after the deno.json bump.
+- [`docs/spike-findings.md`](../../docs/spike-findings.md) — T7 5s warm-up note; stays current (upstream PR #2029 is open, not merged).
 
 **External (Supabase blessed pattern):**
-- [Supabase Docs — Deploy MCP servers](https://supabase.com/docs/guides/getting-started/byo-mcp) — official guide, published 2026-04-30. Hono + `WebStandardStreamableHTTPServerTransport` + `--no-verify-jwt`.
+- [Supabase Docs — Deploy MCP servers](https://supabase.com/docs/guides/getting-started/byo-mcp) — official guide, verified live 2026-05-02. Hono + `WebStandardStreamableHTTPServerTransport` + `--no-verify-jwt`.
 - [matt-fournier/supabase-mcp-template](https://github.com/matt-fournier/supabase-mcp-template) — community template; documents the `--no-verify-jwt` rationale (post-2025 asymmetric keys).
 - [Rodriguespn/supabase-mcp-handler](https://github.com/Rodriguespn/supabase-mcp-handler) — mcp-lite-based helper for Supabase Edge.
 
@@ -253,7 +253,7 @@ These are recommendations, not decisions — ADR will be filed as **Proposed**, 
 - [MCP TypeScript SDK — server.md](https://github.com/modelcontextprotocol/typescript-sdk/blob/main/docs/server.md) — `enableJsonResponse: true` + stateless mode.
 
 **External (supabase-js + Edge interop history):**
-- [supabase-js#2029](https://github.com/supabase/supabase-js/pull/2029) — premature-SUBSCRIBED fix at ~v2.94.0; converts the spike's T7 5s-warm-up into a fixed-at-substrate concern.
+- [supabase-js#2029](https://github.com/supabase/supabase-js/pull/2029) — candidate fix for the premature-SUBSCRIBED bug; **OPEN as of 2026-05-02, not merged**. Tracks the same upstream issue as our T7 5s-warm-up spike finding; deno.json bump does not address this.
 - [supabase-js#1599](https://github.com/supabase/supabase-js/issues/1599) — premature-SUBSCRIBED bug report; matches our T7 finding.
 - [supabase-js#1559](https://github.com/supabase/supabase-js/issues/1559) — Node.js websocket race (browser/Deno fine; Node only).
 - [supabase-js#1937](https://github.com/supabase/supabase-js/pull/1937) — empty-Authorization-header fix (2.88.0); the floor pin already in `package.json`.
