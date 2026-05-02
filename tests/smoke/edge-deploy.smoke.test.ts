@@ -19,6 +19,7 @@
 // Requires the function to have been deployed to the host project (see
 // references/edge-deployment.md for the deploy command).
 
+import { createClient } from "@supabase/supabase-js";
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
 import { fetchProjectKeys } from "./_helpers/project-keys.ts";
@@ -340,4 +341,127 @@ describe.skipIf(!SHOULD_RUN)("Edge Function MCP transport (live deploy)", () => 
     },
     30_000,
   );
+
+  // tools/call subscribe_to_channel E2E (ADR-0016 — closes the second
+  // deferred-from-ADR-0015 verification gap).
+  //
+  // Broadcast doesn't have the postgres-changes warm-up window — the channel
+  // join handshake is the only setup cost (verified at 1.6s wall in the
+  // existing broadcast_to_channel smoke). 10s wall budget is sufficient.
+  //
+  // Topology: an external raw supabase-js client subscribes to the channel
+  // and acts as the broadcast sender. The smoke under test is the deployed
+  // function's subscribe_to_channel tool — agent-side issues tools/call,
+  // function builds a per-request server that subscribes, the external
+  // sender fires a broadcast at +500ms (post-SUBSCRIBED handshake), function
+  // returns with the broadcast in the response.
+  //
+  // CLAUDE.md "single-client channel dedup" foot-gun: sender and listener
+  // (here, the function's per-request listener) MUST be in different
+  // createClient instances. The function builds its own client per request,
+  // so this is automatic — but the smoke's external sender uses a fresh
+  // createClient explicitly to keep the contract obvious.
+  it("tools/call subscribe_to_channel receives a broadcast from an external sender", async () => {
+    const ref = HOST_REF as string;
+    const keys = await fetchProjectKeys(PAT as string, ref);
+    const fnUrl = `https://${ref}.supabase.co/functions/v1/mcp`;
+    const channelName = `edge-smoke-fanout-${Date.now()}`;
+    const supabaseUrl = `https://${ref}.supabase.co`;
+
+    // External sender (separate createClient — topic dedup applies per
+    // client instance; mixing sender+listener on one client silently breaks).
+    const sender = createClient(supabaseUrl, keys.anon);
+    const senderChannel = sender.channel(channelName);
+
+    const senderTimers: Array<ReturnType<typeof setTimeout>> = [];
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error("sender subscribe timed out")), 5_000);
+        senderChannel.subscribe((status, err) => {
+          if (status === "SUBSCRIBED") {
+            clearTimeout(t);
+            resolve();
+          }
+          if (err || status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            clearTimeout(t);
+            reject(err ?? new Error(`sender status=${status}`));
+          }
+        });
+      });
+
+      // Dispatch the smoke-under-test. The function holds the subscription
+      // until the sender broadcasts.
+      const t0 = performance.now();
+      const callPromise = callJsonRpc(fnUrl, keys.anon, {
+        method: "tools/call",
+        params: {
+          name: "subscribe_to_channel",
+          arguments: {
+            channel: channelName,
+            timeout_ms: 10_000,
+            max_events: 1,
+          },
+        },
+        id: 5,
+      });
+
+      // Multi-broadcast schedule. The function's per-request subscribe
+      // handshake takes ~700ms-5s (per docs/spike-findings.md § T7-Edge),
+      // so single-shot +500ms broadcasts race the listener and get lost.
+      // +500ms / +3s / +6s guarantees one lands post-SUBSCRIBED for
+      // typical Edge cold-start budgets. max_events: 1 means the function
+      // returns on the first delivered broadcast.
+      for (const [idx, offset] of [
+        [0, 500],
+        [1, 3_000],
+        [2, 6_000],
+      ] as const) {
+        senderTimers.push(
+          setTimeout(() => {
+            senderChannel
+              .send({
+                type: "broadcast",
+                event: "smoke",
+                payload: { from: "external-sender", n: idx, ts: Date.now() },
+              })
+              .catch((e: Error) => console.warn(`[smoke] broadcast n=${idx} failed: ${e.message}`));
+          }, offset),
+        );
+      }
+
+      const { status, body } = await callPromise;
+      const wall = performance.now() - t0;
+      console.log(`[smoke] subscribe_to_channel E2E wall=${wall.toFixed(0)}ms`);
+
+      expect(status, `function returned HTTP ${status}`).toBe(200);
+      expect(body.jsonrpc).toBe("2.0");
+      expect(body.id).toBe(5);
+      expect(body.error, `JSON-RPC error: ${JSON.stringify(body.error)}`).toBeUndefined();
+      expect(
+        body.result?.isError,
+        `tool returned isError=true; content: ${body.result?.content?.[0]?.text}`,
+      ).not.toBe(true);
+
+      const text = body.result?.content?.[0]?.text ?? "";
+      const out = JSON.parse(text) as {
+        broadcasts: Array<{
+          channel: string;
+          event: string;
+          payload: { from?: string; ts?: number };
+          received_at: string;
+        }>;
+        closed_reason: string;
+      };
+      expect(out.closed_reason).toBe("max_events");
+      expect(out.broadcasts).toHaveLength(1);
+      const broadcast = out.broadcasts[0];
+      expect(broadcast?.event).toBe("smoke");
+      expect(broadcast?.payload?.from).toBe("external-sender");
+    } finally {
+      for (const t of senderTimers) clearTimeout(t);
+      await senderChannel.unsubscribe().catch(() => {});
+      await sender.removeAllChannels().catch(() => {});
+    }
+  }, 30_000);
 });
