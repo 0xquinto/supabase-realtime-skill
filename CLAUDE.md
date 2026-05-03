@@ -29,12 +29,17 @@ bun run eval/runner.ts ci-full    # n=100 (~$2-3, 30 min)
 
 # Multi-model probe (default: claude-haiku-4-5):
 EVAL_TRIAGE_MODEL=claude-sonnet-4-6 bun run eval/runner.ts ci-full
+```
 
-# Release loop (after a `release(vX.Y.Z): ...` PR merges to main):
+### Release ritual (run only after a `release(vX.Y.Z): ...` PR merges to main)
+
+```bash
 git tag vX.Y.Z && git push origin vX.Y.Z         # fires .github/workflows/publish.yml via OIDC
 gh run watch $(gh run list --workflow=publish.yml --limit 1 --json databaseId -q '.[0].databaseId')
 npm view supabase-realtime-skill@X.Y.Z version dist-tags   # verify publish landed
 ```
+
+The Edge Function redeploy is a *separate* PR after this — see § "Release-PR vs Edge-redeploy-PR" below for the load-bearing reason.
 
 Operator setup: [`references/edge-deployment.md`](references/edge-deployment.md). Requires Supabase Pro + a dedicated host project + a fine-grained PAT.
 
@@ -190,7 +195,7 @@ When bumping any version in `supabase/functions/mcp/deno.json`: `cd supabase/fun
 
 ### Release-PR vs Edge-redeploy-PR are always two separate PRs
 
-The `npm:supabase-realtime-skill@^X.Y.Z/server` import range in `supabase/functions/mcp/deno.json` cannot be bumped in the same PR as the `package.json` version bump — the new npm version doesn't exist until the tag fires the publish workflow, so `deno cache --reload` would fail at lock-regen time. Pattern: (1) `feat/vX.Y.Z-tag` PR bumps `package.json` + CHANGELOG only; (2) merge → tag → publish; (3) `feat/edge-redeploy-vX.Y.Z` PR bumps `deno.json` + regens `deno.lock`; (4) operator runs `supabase functions deploy` after merge; (5) commit smoke receipt to `logs/smoke-edge-deploy/`. The v0.3.0 ship loop (PRs #23 / #24 / #25) is the reference shape.
+The `npm:supabase-realtime-skill@^X.Y.Z/server` import range in `supabase/functions/mcp/deno.json` cannot be bumped in the same PR as the `package.json` version bump — the new npm version doesn't exist until the tag fires the publish workflow, so `deno cache --reload` would fail at lock-regen time. Pattern: (1) `feat/vX.Y.Z-tag` PR bumps `package.json` + CHANGELOG only; (2) merge → run the § "Release ritual" block above (`git tag` → publish workflow → `npm view`); (3) `feat/edge-redeploy-vX.Y.Z` PR bumps `deno.json` and **composes with § "Deno lock regen" above** (`rm -f deno.lock && deno cache --reload index.ts && deno check index.ts`); (4) operator runs `supabase functions deploy` after merge; (5) commit smoke receipt to `logs/smoke-edge-deploy/`. The v0.3.0 ship loop (PRs #23 / #24 / #25) is the reference shape.
 
 ## Where to put new info
 
