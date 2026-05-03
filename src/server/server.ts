@@ -157,7 +157,7 @@ const TOOL_DEFS = [
 
 export function makeServer(cfg: ServerConfig): Server {
   const server = new Server(
-    { name: "supabase-realtime", version: "0.2.0" },
+    { name: "supabase-realtime", version: "0.3.0" },
     { capabilities: { tools: {} } },
   );
 

@@ -57,7 +57,7 @@ describe("Edge Function transport wiring", () => {
       jsonrpc: "2.0",
       id: 1,
       result: {
-        serverInfo: { name: "supabase-realtime", version: "0.2.0" },
+        serverInfo: { name: "supabase-realtime", version: "0.3.0" },
         capabilities: { tools: {} },
       },
     });

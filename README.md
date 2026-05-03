@@ -4,7 +4,7 @@
 [![ci-fast](https://github.com/0xquinto/supabase-realtime-skill/actions/workflows/ci-fast.yml/badge.svg)](https://github.com/0xquinto/supabase-realtime-skill/actions/workflows/ci-fast.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-Agent Skill + MCP server that gives an LLM agent a **bounded primitive for reacting to Postgres row-changes** (and coordinating over Realtime broadcast channels) on Supabase. Deploys as an Edge Function. Ships pre-registered eval thresholds and 14 ADRs documenting the load-bearing tradeoffs (substrate-correctness fixes for multi-tenant RLS landed in ADRs 0011-0014; current release is `0.2.0`).
+Agent Skill + MCP server that gives an LLM agent a **bounded primitive for reacting to Postgres row-changes** (and coordinating over Realtime broadcast channels) on Supabase. Deploys as an Edge Function. Ships pre-registered eval thresholds and 16 ADRs documenting the load-bearing tradeoffs (substrate-correctness fixes for multi-tenant RLS landed in ADRs 0011-0014; tool-routing + E2E smoke surface in ADRs 0015-0016; current release is `0.3.0`. v1.0.0 stays unclaimed until manifest n=300 ships per ADR-0016 recon Decision 4).
 
 The headline pattern is **agent-watches-database**: the agent calls a tool that blocks until either `max_events` arrive *or* `timeout_ms` elapses, then returns the batch. No streaming protocol, no persistent connection across tool-calls — fits MCP's request/response shape and Edge Function isolate budgets (Pro caps wall-clock at 150s; this caps tool timeout at 120s).
 
@@ -167,7 +167,7 @@ The pre-T31 recon (whether to file the upstream issue) lives in [`docs/upstream/
 
 - [`SKILL.md`](SKILL.md) — Open Skills Standard entry; three triggers + tools at a glance
 - [`references/`](references/) — 11 opinionated patterns (predicates, RLS implications, multi-tenant RLS deep dive, replication identity, pgvector composition, eval methodology, edge deployment, presence-deferred, worked example, outbox forwarder, queue drain)
-- [`CHANGELOG.md`](CHANGELOG.md) — release log (`0.2.0` headlines the worked-example ship)
+- [`CHANGELOG.md`](CHANGELOG.md) — release log (`0.3.0` headlines the E2E smoke surface ship; `0.2.0` headlines the worked-example ship)
 - [`src/server/`](src/server/) — MCP server (5 tools) + bounded primitives + production adapters
 - [`src/client/`](src/client/) — npm consumer barrel (boundedWatch + schemas + types)
 - [`supabase/functions/mcp/`](supabase/functions/mcp/) — Edge Function entry (`WebStandardStreamableHTTPServerTransport`)
