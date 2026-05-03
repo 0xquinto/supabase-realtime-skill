@@ -46,7 +46,7 @@ Adversarial sibling to [`2026-05-03-bounded-watch-as-tool-recon.md`](2026-05-03-
 - Phase 1 (cursor + contract on the bespoke surface) is NOT throwaway: the cursor + state machine + idempotency + retry policy + multi-watcher bench are all reusable in Phase 2's resource-subscribe path. The state-handling layer is independent of the wire-protocol layer.
 - The bespoke-tool surface is shipped, deployed, smoke-tested. Migrating it to `resources/subscribe`-only would be a regression-risk move when the cursor + contract work is the critical-path engineering ship.
 
-**Resolved as:** R4 is the most architecturally interesting risk and the recon already flags it as a real Phase 2 concern (ADR-0018). Phase 1 stays bespoke; Phase 2 adds the resource-subscribe alternate path; both coexist. **This is the only counter-read that genuinely changes downstream architecture, even though it doesn't redirect Phase 1.**
+**Resolved as:** R4 is the most architecturally interesting risk and the recon already flags it as a real Phase 2 concern (numbering TBD when filed). Phase 1 stays bespoke; Phase 2 adds the resource-subscribe alternate path; both coexist. **This is the only counter-read that genuinely changes downstream architecture, even though it doesn't redirect Phase 1.**
 
 ## R5: "This is process-as-moat in a new costume — discipline-as-engineering."
 
@@ -61,14 +61,17 @@ Adversarial sibling to [`2026-05-03-bounded-watch-as-tool-recon.md`](2026-05-03-
 
 **Resolved as:** R5 doesn't redirect the engineering work but flags a real risk in the post's framing. The recon's § "Discipline-check" already names this. Hold the line.
 
-## What survives as real risk
+## What survives as real risk vs. accepted constraints
 
-- **R4** changes Phase 2 architecture (recon already flags as ADR-0018).
-- **R5** influences post-writing (constrains headline framing; the recon already names the constraint).
-- **R1, R2, R3** don't redirect Phase 1; they correctly identify framing tensions that the post needs to acknowledge head-on (alternative products + alternative runtimes exist; we differentiate, we don't dominate).
+**Real risk:**
+- **R4** changes Phase 2 architecture. Flagged for the next ADR after 0017 (numbering TBD).
+
+**Accepted constraints (the post and SDK adopt these):**
+- **R5** → primitive-first headline; framing in the body; benchmarks as figures; ADRs as footnote provenance only.
+- **R1, R2, R3** → writeup acknowledges Inngest+Pulse, Cloudflare DO, Trigger.dev head-on as alternatives at different abstraction layers; positions the artifact as complementary, not dominating.
 
 ## Adversarial direction: same as recon
 
-Counter-recon does not redirect Phase 1. ADR-0017 ships the cursor + contract + bench + failure-model package as the recon outlined. Phase 2 (`resources/subscribe` alternate path) deferred to ADR-0018, with recon evidence locked in.
+Counter-recon does not redirect Phase 1. ADR-0017 ships the cursor + contract + bench + failure-model package as the recon outlined. Phase 2 (`resources/subscribe` alternate path) deferred to the next ADR (numbering TBD), with recon evidence locked in.
 
 The post should not lead with framing. The primitive earns the headline; the framing is one paragraph in.

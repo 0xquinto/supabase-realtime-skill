@@ -34,6 +34,8 @@ Sources:
 
 **Decision:** cursor model = `{watcher_id, last_processed_pk, last_processed_at, idempotency_key, lease_holder, heartbeat_at, status: idle|leased|processing|committed|dlq}`. Action invocation is at-least-once; user's action is responsible for being idempotent under the same `idempotency_key`. Cursor advances *only* on action success commit. State machine and vocab adopt Debezium's "offset-after-commit" pattern, not Postgres's WAL-LSN coupling (we sit a layer above logical replication — Realtime is our wire protocol).
 
+**Vocabulary mapping (callback ↔ cursor row):** the user's `dedupKey: (row) => string` callback in the SDK contract (Fork 4 prescription / § Direction signature) computes the `idempotency_key` value stored on the cursor row. Cursor row is the persistence side; callback is the user-facing input side; same logical key, two surfaces.
+
 ### Fork 2: Edge runtime stateful vs stateless
 
 **Stay stateless + DB-backed cursor. Document Cloudflare Durable Objects as the alternative for users who want stateful actors.**
@@ -55,13 +57,13 @@ Sources:
 
 **Tension:** the MCP-native pattern is pull-mode (notify-then-reread). Bounded-watch needs payload-with-event for latency-bounded reactivity (∼100-200ms post-warmup, per spike). If we fold into `resources/subscribe`, the agent pays an extra round-trip per event.
 
-**Decision:** Phase 1 keeps the current bespoke-tool surface (it's already shipped and works). Phase 2 (post-cursor ship) adds an `resources/subscribe`-shaped alternate path where each `support_tickets/{pk}` row is exposed as an MCP resource, the bounded subscription is re-shaped into a resource-list subscription, and the notification fires on each row commit. Users who want MCP-native pick that path; users who want push-payload-with-event keep the tool path. Document the tradeoff explicitly in the writeup. **This is a real Phase 2 ADR (∼0018) — out of ADR-0017's scope, but recon-flagged here so we don't rebuild Phase 2 from scratch.**
+**Decision:** Phase 1 keeps the current bespoke-tool surface (it's already shipped and works). Phase 2 (post-cursor ship) adds an `resources/subscribe`-shaped alternate path where each `support_tickets/{pk}` row is exposed as an MCP resource, the bounded subscription is re-shaped into a resource-list subscription, and the notification fires on each row commit. Users who want MCP-native pick that path; users who want push-payload-with-event keep the tool path. Document the tradeoff explicitly in the writeup. **This is a real Phase 2 ADR (numbering TBD when filed) — out of ADR-0017's scope, but recon-flagged here so we don't rebuild Phase 2 from scratch.**
 
 ### Fork 4: novel-framing check ("bounded subscription as context-window for streams")
 
-**The framing appears not yet coined; ship it as the canonical reference.**
+**Framing-room appears open in a focused 2026-05-03 scan; the primitive earns the framing if shipped, not the other way around.**
 
-Sources scanning for prior art:
+Sources scanning for prior art (Exa scan, ~10 results, 2024-06 → 2026-05):
 - [luaxe.dev, "The Context Window Is the Process Boundary"](http://www.luaxe.dev/blog/2026-03-17-the-context-window-is-the-process-boundary/) (2026-03-17) — argues context window IS the process boundary for coding agents; no extension to streams.
 - [Zylos, "Rate Limiting and Backpressure for AI Agent APIs"](https://zylos.ai/research/2026-02-25-rate-limiting-backpressure-ai-agent-apis) (2026-02-25) — closest adjacent framing; argues RPS rate limiting fails for agents because cost is heterogeneous; doesn't extend to streaming subscriptions specifically.
 - [learnwithparam, "Context Window Management for Production Agents"](https://www.learnwithparam.com/blog/context-window-management-production-ai-agents) (2026-02-27) — tactical compression patterns; not a streaming primitive.
@@ -69,7 +71,7 @@ Sources scanning for prior art:
 - [pydantic-ai-harness #146](https://github.com/pydantic/pydantic-ai-harness/issues/146) (2026-04-02) — sub-agent event propagation through parent stream; framework-internal, not a substrate primitive.
 - [Mastra PR #15686](https://github.com/mastra-ai/mastra/pull/15686) (2026-04-23) — `streamUntilIdle` keeps streams open until background tasks complete; orthogonal.
 
-**Verdict:** the explicit framing "bounded subscription is to streaming what context-window-budgeting is to tool-calls" appears not to be in the public literature as of 2026-05-03. The adjacent work (rate-limiting, context-window management, durable execution) is real and well-developed but operates at different abstraction layers. **We can coin this framing if we ship the primitive that earns it.** The post is the canonical reference if it lands.
+**Verdict:** a focused Exa scan didn't surface the explicit framing "bounded subscription is to streaming what context-window-budgeting is to tool-calls" (this is scan-shape evidence, not exhaustive — claims open framing-room, not provable absence). The adjacent work (rate-limiting, context-window management, durable execution) is real and well-developed but operates at different abstraction layers. **The primitive earns the framing if shipped; framing without primitive is process-as-moat shaped.**
 
 **Discipline-check (per CLAUDE.md § Anti-patterns "process-as-moat"):** "we coined a framing" is not the value — the bounded primitive + measured isolate budget + substrate-correct wrapper is the value. The framing is a description of the value, not the value itself. If we frame the post around the framing rather than the primitive, that's drift. Headline is the primitive; framing is one paragraph in.
 
@@ -88,18 +90,18 @@ Sources:
 
 ## Direction: ADR-0017 commitments
 
-If the counter-recon clears (sibling file), ADR-0017 commits:
+The counter-recon (sibling file) cleared with one architectural carve-out (R4 → Phase 2 deferral). ADR-0017 commits:
 1. **Cursor design** — the state machine + vocabulary from Fork 1. Predicted effect: restart smoke test passes (write test scaffold first, FAIL→fix→PASS shape per ADR-0011 / 0013 pattern).
 2. **Typed action contract** — single `boundedWatch<TRow, TResult>(...)` SDK signature with `dedupKey`, `action`, `onError`, `observe` hooks. Two built-in actions (`httpAction`, `claudeAction`).
 3. **Multi-watcher isolate-budget bench** — measured p95/p99 + heap peak at N=1, 5, 10, 20 watchers in one Edge isolate. Numbers ship with the post.
 4. **Failure-model packaged** — every documented gotcha (RLS payload stripping, warm-up, private-channel ack, single-client dedup, GRANT chain, `httpSend` reject contract) gets a regression test in `tests/fast/` or `tests/smoke/`.
-5. **Phase 2 deferred** — `resources/subscribe`-shaped alternate path is ADR-0018, not ADR-0017's scope. Recon has flagged it so the SDK surface doesn't preclude it.
+5. **Phase 2 deferred** — `resources/subscribe`-shaped alternate path is the next ADR after 0017 (numbering TBD when filed), not ADR-0017's scope. Recon has flagged it so the SDK surface doesn't preclude it.
 
 ## Out of scope (and why)
 
 - **Multi-tenant fan-out** — already deferred per ADR-0014; v2-hardening surface, not Phase-1.
 - **Manifest n=300** — orthogonal to this work; the framing-drift filter (process-as-moat) caught the impulse to bundle it.
-- **T31 upstream issue file** — engagement-vehicle data (issues #63, #70 sitting at 0 engagement for 10-23 days) suggests low-signal; the cooked-shape post + demo is the better front-of-the-line vehicle.
+- **T31 upstream issue file** — engagement-vehicle data point: 2 recent `[User Feedback]` issues (#63, #70) sit at 0 engagement after 10-23 days. Suggestive, not conclusive (n=2). Ordering decision: cooked-shape post + demo first; T31 reconsidered after the post lands (post + repo link makes any subsequent issue file land warmer than a cold ask).
 - **MCP authentication** — Supabase's own BYO-MCP guide flags "auth support coming soon"; we ride that timeline.
 
 ## Pre-counter-recon tilt
