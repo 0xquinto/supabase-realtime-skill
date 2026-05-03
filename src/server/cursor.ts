@@ -7,9 +7,12 @@
 // Cursor advance is ATOMIC with status flip to committed — no time-based
 // commit, ever (RisingWave#25071 lesson).
 //
-// Two CursorStore implementations are planned:
-// - makeInMemoryCursorStore (this file): for fast tests + ephemeral flows.
-// - makePostgresCursorStore (next PR): production durable store + restart smoke.
+// Two CursorStore implementations:
+// - makeInMemoryCursorStore: for fast tests + ephemeral flows (in-process Map).
+// - makePostgresCursorStore: production durable store backed by the
+//   realtime_skill_cursors table (see supabase/migrations/20260503000001_*).
+//   Uses transactional SELECT … FOR UPDATE so concurrent isolates can't
+//   race lease acquisition.
 
 export type CursorStatus = "idle" | "leased" | "committed" | "dlq";
 
@@ -255,6 +258,238 @@ export function makeInMemoryCursorStore(config: InMemoryCursorStoreConfig = {}):
       };
       rows.set(watcher_id, row);
       return { ok: true };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Postgres-backed CursorStore — production durable store.
+// ---------------------------------------------------------------------------
+
+// Minimal subset of the postgres-js Sql interface we use. Defining this here
+// avoids a hard `import postgres` in the server bundle (postgres-js is a smoke-
+// test-side dependency, not an Edge runtime one). Operators who want this
+// adapter will already have postgres-js available in their stack.
+//
+// Split into Base (used inside transactions, no nested begin) + outer (with
+// begin) so the type lines up with postgres-js' actual TransactionSql shape.
+
+interface PgSqlBase {
+  // Tagged template — postgres-js spec returns rows as a Promise-like array.
+  // The `unknown` row type forces operators to validate at the callsite.
+  // biome-ignore lint/suspicious/noExplicitAny: postgres-js' tag returns a thenable that resolves to row arrays
+  (strings: TemplateStringsArray, ...values: any[]): Promise<unknown[]> & { [key: string]: any };
+  // Identifier escaping helper: sql(tableName) interpolates as a quoted identifier.
+  // biome-ignore lint/suspicious/noExplicitAny: postgres-js' identifier helper accepts strings and returns an opaque marker
+  (value: string): any;
+}
+
+interface PgSql extends PgSqlBase {
+  // Transactional helper. The callback receives a transaction-bound sql
+  // instance (PgSqlBase — no nested begin, matching postgres-js' actual
+  // TransactionSql signature).
+  begin<T>(callback: (tx: PgSqlBase) => Promise<T>): Promise<T>;
+}
+
+export interface PostgresCursorStoreConfig {
+  /** A postgres-js Sql instance (created via `postgres(connectionUrl)`). */
+  client: PgSql;
+  /** Cursor table name. Must match the migration's table (default: realtime_skill_cursors). */
+  table: string;
+  /** Injectable for tests. Defaults to () => new Date(). */
+  now?: () => Date;
+}
+
+interface DbCursorRow {
+  watcher_id: string;
+  last_processed_pk: string | null;
+  last_processed_at: Date | string | null;
+  idempotency_key: string | null;
+  status: CursorStatus;
+  lease_holder: string | null;
+  heartbeat_at: Date | string | null;
+  lease_expires_at: Date | string | null;
+  attempts: number;
+}
+
+function tsToIso(value: Date | string | null): string | null {
+  if (value === null) return null;
+  if (value instanceof Date) return value.toISOString();
+  return new Date(value).toISOString();
+}
+
+function dbRowToCursorRow(row: DbCursorRow): CursorRow {
+  return {
+    watcher_id: row.watcher_id,
+    last_processed_pk: row.last_processed_pk ?? "",
+    last_processed_at: tsToIso(row.last_processed_at) ?? "",
+    idempotency_key: row.idempotency_key ?? "",
+    status: row.status,
+    lease_holder: row.lease_holder,
+    heartbeat_at: tsToIso(row.heartbeat_at),
+    lease_expires_at: tsToIso(row.lease_expires_at),
+    attempts: row.attempts,
+  };
+}
+
+/**
+ * Production CursorStore backed by Postgres. Wraps every state transition in
+ * an explicit transaction with `SELECT … FOR UPDATE` so concurrent isolates
+ * can't race lease acquisition. Schema: see
+ * supabase/migrations/20260503000001_realtime_skill_cursors.sql.
+ */
+export function makePostgresCursorStore(config: PostgresCursorStoreConfig): CursorStore {
+  const { client, table } = config;
+  const now = config.now ?? (() => new Date());
+
+  return {
+    async read(watcher_id) {
+      const rows = (await client`
+        select * from ${client(table)} where watcher_id = ${watcher_id}
+      `) as DbCursorRow[];
+      return rows.length > 0 ? dbRowToCursorRow(rows[0] as DbCursorRow) : null;
+    },
+
+    async acquire(watcher_id, lease_holder, lease_ttl_ms) {
+      return await client.begin<AcquireResult>(async (sql) => {
+        // Idempotent first-create. Concurrent first-creates: one wins, the
+        // other gets DO NOTHING and proceeds to FOR UPDATE on the winner's row.
+        await sql`
+          insert into ${sql(table)} (watcher_id, status, attempts)
+          values (${watcher_id}, 'idle', 0)
+          on conflict (watcher_id) do nothing
+        `;
+
+        const lockedRows = (await sql`
+          select * from ${sql(table)} where watcher_id = ${watcher_id} for update
+        `) as DbCursorRow[];
+        const existing = lockedRows[0] as DbCursorRow;
+
+        if (existing.status === "dlq") {
+          return { acquired: false, row: dbRowToCursorRow(existing) };
+        }
+
+        const sameHolder = existing.lease_holder === lease_holder;
+        const expired =
+          existing.lease_expires_at === null ||
+          new Date(existing.lease_expires_at).getTime() <= now().getTime();
+        const noLease = existing.lease_holder === null;
+
+        if (sameHolder || noLease || expired) {
+          const ts = now();
+          const expiresAt = new Date(ts.getTime() + lease_ttl_ms);
+          const updated = (await sql`
+            update ${sql(table)} set
+              status = 'leased',
+              lease_holder = ${lease_holder},
+              heartbeat_at = ${ts.toISOString()},
+              lease_expires_at = ${expiresAt.toISOString()},
+              updated_at = ${ts.toISOString()}
+            where watcher_id = ${watcher_id}
+            returning *
+          `) as DbCursorRow[];
+          return { acquired: true, row: dbRowToCursorRow(updated[0] as DbCursorRow) };
+        }
+
+        return { acquired: false, row: dbRowToCursorRow(existing) };
+      });
+    },
+
+    async heartbeat(watcher_id, lease_holder) {
+      return await client.begin<HeartbeatResult>(async (sql) => {
+        const lockedRows = (await sql`
+          select * from ${sql(table)} where watcher_id = ${watcher_id} for update
+        `) as DbCursorRow[];
+        const existing = lockedRows[0] as DbCursorRow | undefined;
+
+        if (!existing || existing.lease_holder !== lease_holder) {
+          return { ok: false };
+        }
+
+        const originalTtlMs =
+          existing.heartbeat_at && existing.lease_expires_at
+            ? new Date(existing.lease_expires_at).getTime() -
+              new Date(existing.heartbeat_at).getTime()
+            : 0;
+        const ts = now();
+        const newExpiresAt = new Date(ts.getTime() + originalTtlMs);
+
+        await sql`
+          update ${sql(table)} set
+            heartbeat_at = ${ts.toISOString()},
+            lease_expires_at = ${newExpiresAt.toISOString()},
+            updated_at = ${ts.toISOString()}
+          where watcher_id = ${watcher_id}
+        `;
+        return { ok: true };
+      });
+    },
+
+    async commit(watcher_id, lease_holder, advance) {
+      return await client.begin<CommitResult>(async (sql) => {
+        const lockedRows = (await sql`
+          select * from ${sql(table)} where watcher_id = ${watcher_id} for update
+        `) as DbCursorRow[];
+        const existing = lockedRows[0] as DbCursorRow | undefined;
+
+        if (existing?.status === "dlq") {
+          return { ok: false, deduped: false, reason: "dlq_terminal" };
+        }
+        if (!existing || existing.lease_holder === null) {
+          return { ok: false, deduped: false, reason: "no_lease" };
+        }
+        if (existing.lease_holder !== lease_holder) {
+          return { ok: false, deduped: false, reason: "wrong_holder" };
+        }
+
+        const existingKey = existing.idempotency_key ?? "";
+        if (existingKey !== "" && existingKey === advance.idempotency_key) {
+          return { ok: true, deduped: true };
+        }
+
+        const existingPk = existing.last_processed_pk ?? "";
+        if (existingPk !== "" && advance.last_processed_pk <= existingPk) {
+          return { ok: false, deduped: false, reason: "non_monotonic" };
+        }
+
+        const ts = now();
+        await sql`
+          update ${sql(table)} set
+            last_processed_pk = ${advance.last_processed_pk},
+            last_processed_at = ${advance.last_processed_at},
+            idempotency_key = ${advance.idempotency_key},
+            status = 'committed',
+            attempts = 0,
+            updated_at = ${ts.toISOString()}
+          where watcher_id = ${watcher_id}
+        `;
+        return { ok: true, deduped: false };
+      });
+    },
+
+    async release(watcher_id, lease_holder, status, _reason) {
+      return await client.begin<ReleaseResult>(async (sql) => {
+        const lockedRows = (await sql`
+          select * from ${sql(table)} where watcher_id = ${watcher_id} for update
+        `) as DbCursorRow[];
+        const existing = lockedRows[0] as DbCursorRow | undefined;
+
+        if (!existing || existing.lease_holder !== lease_holder) {
+          return { ok: false };
+        }
+
+        const ts = now();
+        await sql`
+          update ${sql(table)} set
+            status = ${status},
+            lease_holder = null,
+            heartbeat_at = null,
+            lease_expires_at = null,
+            updated_at = ${ts.toISOString()}
+          where watcher_id = ${watcher_id}
+        `;
+        return { ok: true };
+      });
     },
   };
 }

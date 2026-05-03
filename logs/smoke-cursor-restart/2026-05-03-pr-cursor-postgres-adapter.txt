@@ -1,0 +1,78 @@
+# Substrate-level GREEN receipt for ADR-0017's makePostgresCursorStore.
+# (The unit-level FAIL→PASS pair was captured in PR #30 against
+# makeInMemoryCursorStore — commit a06b49b 24/24 RED → 831d5f3 24/24
+# GREEN. This file is the GREEN-only substrate validation; no RED state
+# was authored at the substrate layer, and labeling this a "FAIL→PASS
+# pair" would be discipline-as-headline drift per CLAUDE.md anti-patterns.)
+#
+# Branch:           feat/cursor-postgres-adapter
+# Date:             2026-05-03
+# Host project:     EVAL_HOST_PROJECT_REF (uetkiogzuwhzshczaajr)
+# Postgres URL:     EVAL_HOST_DB_URL (pooler)
+# Cursor table:     created + dropped inline (host project's `public` schema
+#                   is empty by default per CLAUDE.md; smoke-managed temp
+#                   table named realtime_skill_cursors_smoke_<timestamp>)
+#
+# Verification command:
+#   set -a && source .env && set +a
+#   bun run vitest run tests/smoke/cursor-restart.smoke.test.ts
+#
+# Receipt: 3/3 PASS, 10.97s total wall.
+#
+# Test breakdown:
+#   - "preserves cursor state across an expired-lease takeover (the headline)"
+#       5216ms — 1.5s sleep waiting for lease expiry + the rest is RTT to Postgres.
+#       Validates: after H1 commits 3 events with TTL=1s, lease expires, H2
+#       acquires (steals), reads last_processed_pk = "pk-003" (PRESERVED ACROSS
+#       RESTART), non-monotonic commit rejected with reason="non_monotonic",
+#       H2 commits 2 more events normally, final state = pk-005.
+#
+#   - "dedups idempotency_key replay across an expired-lease takeover"
+#       3783ms — same shape with shorter sequence.
+#       Validates: H1 commits k-A, lease expires, H2 acquires, attempts to
+#       commit k-A again with a different pk → returns ok:true deduped:true,
+#       no advance. H2 advances normally with k-B. This is the at-least-once
+#       recovery story validated against real Postgres.
+#
+#   - "denies a fresh holder when lease is still valid"
+#       1103ms — fast path, no sleep.
+#       Validates: H1 holds 30s lease, H2 acquire returns acquired:false with
+#       lease_holder = H1 in the returned row.
+#
+# Pairs with the unit-level FAIL→PASS receipt for makeInMemoryCursorStore
+# captured in PR #30 (commits a06b49b → 831d5f3, 24/24 RED → 24/24 GREEN).
+# Together they form the joint promotion gate ADR-0017's Status footer
+# specified.
+#
+# State machine behaviors validated end-to-end against real Postgres:
+#   - acquire: from no-row, from same-holder, from expired-lease (steal),
+#     from valid-lease-different-holder (deny)
+#   - commit: success path, dlq_terminal not reached, monotonic guard
+#     across-holder, idempotency-key dedup
+#   - release: clean idle release
+#   - read: full row returned with all timestamp fields
+#
+# What was NOT exercised in this smoke (out of ADR-0017 scope):
+#   - dlq terminal path (in-memory unit test covers; substrate-level dlq
+#     terminal would need a more elaborate fixture)
+#   - heartbeat refresh (in-memory unit test covers; substrate refresh is
+#     identical SQL UPDATE shape)
+#   - Concurrent acquire from N isolates racing the same expired lease
+#     (transactional FOR UPDATE makes this safe by construction; explicit
+#     race test deferred to a load-bench in a future PR if it becomes
+#     load-bearing)
+#
+# This receipt closes ADR-0017's substrate-level FAIL→PASS commitment.
+# Operator review pending; promotion to Accepted gated on Diego's review.
+
+ RUN  v2.1.9 /Users/diego/Dev/supabase-realtime-skill
+
+ ✓ |smoke| tests/smoke/cursor-restart.smoke.test.ts (3 tests) 10802ms
+   ✓ Postgres CursorStore — restart smoke (ADR-0017) > preserves cursor state across an expired-lease takeover (the headline) 5216ms
+   ✓ Postgres CursorStore — restart smoke (ADR-0017) > dedups idempotency_key replay across an expired-lease takeover 3783ms
+   ✓ Postgres CursorStore — restart smoke (ADR-0017) > denies a fresh holder when lease is still valid 1103ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  10:23:45
+   Duration  10.97s (transform 19ms, setup 4ms, collect 21ms, tests 10.80s, environment 0ms, prepare 21ms)

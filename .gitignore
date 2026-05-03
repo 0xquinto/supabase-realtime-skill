@@ -9,12 +9,13 @@ supabase/.temp
 
 # Machine-generated eval artifacts: ignore everything under logs/ by default,
 # then carve out spike-latency + spike-edge-warmup JSON logs + smoke-edge-deploy
-# receipts (finding-quality, committed alongside docs/spike-findings.md and
-# the ADRs they back).
+# + smoke-cursor-restart receipts (finding-quality, committed alongside
+# docs/spike-findings.md and the ADRs they back).
 logs/*
 !logs/spike-latency/
 !logs/spike-edge-warmup/
 !logs/smoke-edge-deploy/
+!logs/smoke-cursor-restart/
 
 # Per-provider embedding backups (each ~3.8 MiB; the canonical
 # fixtures/embeddings.json IS committed). Keep backups local-only —

@@ -1,7 +1,7 @@
 # ADR 0017: bounded-watch persistent cursor — restart-safe at-least-once with idempotency-key dedup
 
 **Date:** 2026-05-03
-**Status:** Proposed (design locked from [recon 2026-05-03](../recon/2026-05-03-bounded-watch-as-tool-recon.md); FAIL receipt + GREEN impl receipt both captured in this same PR — single-PR FAIL→fix→PASS shape mirroring [ADR-0013](0013-private-channel-broadcast-authorization.md))
+**Status:** Proposed (unit-level FAIL→PASS captured in PR #30 — `a06b49b` 24/24 RED → `831d5f3` 24/24 GREEN; substrate-level GREEN captured in this PR — `tests/smoke/cursor-restart.smoke.test.ts` 3/3 PASS in 10.97s against real host Postgres, see [`logs/smoke-cursor-restart/2026-05-03-pr-cursor-postgres-adapter.txt`](../../logs/smoke-cursor-restart/2026-05-03-pr-cursor-postgres-adapter.txt). Awaiting operator review for Accepted promotion.)
 **Recommender:** Claude Opus 4.7 (assistant)
 **Decider:** Diego Gomez (will promote to Accepted after operator review of this PR)
 
@@ -100,17 +100,22 @@ The FAIL→PASS test discipline (per ADR-0011 / 0013) commits to:
 **PASS receipt (this same PR, 2026-05-03 ~10:08 PT):**
 - Same test file, ZERO test changes; `makeInMemoryCursorStore()` impl shipped. **Captured: 74/74 fast tests PASS (50 pre-existing + 24 cursor cases).** Typecheck PASS, lint PASS, total wall ~1.43s. The same code path that emitted "ADR-0017 cursor impl not yet shipped" 24 times now emits 24 green checks — only the impl swapped between RED and GREEN.
 
-**Predicted PASS (next PR — Postgres adapter + restart smoke):**
-- New `tests/smoke/cursor-restart.smoke.test.ts` against a real Pro branch. Spawns a watcher with `cursor` supplied; injects 5 INSERTs; kills the simulated isolate after the 3rd commit; reacquires from a fresh isolate; injects 2 more INSERTs; verifies the user's action callback received exactly 5 distinct events (no duplicates, no gaps), and the cursor row's `last_processed_pk` is the 5th INSERT's PK.
+**Substrate-level PASS receipt (this PR, 2026-05-03 ~10:23 PT):**
+- `tests/smoke/cursor-restart.smoke.test.ts` against the host project's Postgres. Three cases, **3/3 PASS in 10.97s**:
+  - "preserves cursor state across an expired-lease takeover (the headline)" — H1 commits 3 events with TTL=1s, lease expires, H2 acquires (steals), reads `last_processed_pk = "pk-003"` (preserved across simulated restart), non-monotonic commit rejected, H2 advances normally, final state correct.
+  - "dedups idempotency_key replay across an expired-lease takeover" — H1 commits k-A, expires, H2 takes over, replays k-A → `deduped: true` no advance. The at-least-once recovery story validated against real Postgres.
+  - "denies a fresh holder when lease is still valid" — H1 holds 30s lease, H2 acquire returns `acquired: false` with H1 still on the row.
+- Receipt at [`logs/smoke-cursor-restart/2026-05-03-pr-cursor-postgres-adapter.txt`](../../logs/smoke-cursor-restart/2026-05-03-pr-cursor-postgres-adapter.txt).
 
-The empirical FAIL→PASS pair on the in-memory store validates the state-machine design at the unit level. The Postgres+restart-smoke pair (next PR) validates it at the substrate level. If the latter exposes a behavior the in-memory tests didn't cover, this ADR amends; if it doesn't, ADR-0017 promotes to Accepted at that point.
+The in-memory FAIL→PASS pair (PR #30) validates the state-machine logic at the unit level; the Postgres restart-smoke pair (this PR) validates it at the substrate level. Both are GREEN with no design amendments needed. ADR-0017 promotes to Accepted on operator review.
 
 ## Cost ceiling
 
-- **This PR (actual):** ~1.5h wall. ADR + types + stub + 24-case scaffold + in-memory impl + FAIL→PASS receipts in single round-trip. Cheaper than the original "two-PR" plan because the design was tight enough that the impl was direct from the state machine.
-- **Next PR (Postgres adapter + restart smoke):** ~1.5 days + ~$0.10 in branch provisioning. Migration for `realtime_skill_cursors` + Postgres adapter + `tests/smoke/cursor-restart.smoke.test.ts`.
+- **PR #30 (in-memory):** ~1.5h wall. ADR + types + stub + 24-case scaffold + in-memory impl + FAIL→PASS receipts in single round-trip.
+- **This PR (Postgres + restart smoke):** ~1.5h wall + $0 in branch provisioning (smoke uses host project, no `withBranch`). Migration + Postgres adapter + `tests/smoke/cursor-restart.smoke.test.ts` (3/3 PASS, 10.97s).
+- **Original estimates** in PR #30: ~half-day for in-memory + ~1.5 days for Postgres. Actual: ~3h total. The state machine was tight enough that both implementations were direct translations from the design.
 
-Total: ~2 days for the cursor layer. Action contract (the next ADR after 0017) and multi-watcher isolate-budget bench are separate ships.
+Action contract (the next ADR after 0017) and multi-watcher isolate-budget bench are separate ships. Threading `cursor` into `boundedWatch`'s subscription loop is its own PR (the ADR explicitly defers).
 
 ## Out of scope (and why)
 
@@ -122,14 +127,17 @@ Total: ~2 days for the cursor layer. Action contract (the next ADR after 0017) a
 
 ## What this ADR doesn't do
 
-- **Doesn't ship the Postgres adapter.** In-memory store only. The next PR ships `makePostgresCursorStore` + the `realtime_skill_cursors` migration + a restart smoke test against a real Pro branch.
-- **Doesn't wire the cursor into `boundedWatch` yet.** `CursorStore` is a standalone primitive; threading the optional `cursor?: { store, watcher_id, lease_ttl_ms }` parameter into `boundedWatch`'s subscription loop is the PR after that.
+- **Doesn't wire the cursor into `boundedWatch` yet.** `CursorStore` is a standalone primitive; threading the optional `cursor?: { store, watcher_id, lease_ttl_ms }` parameter into `boundedWatch`'s subscription loop is the next PR.
 - **Doesn't change `boundedWatch`'s default behavior.** `cursor` is opt-in; v0.3.x consumers see no API surface change.
-- **Doesn't promise the design holds at substrate level.** The in-memory FAIL→PASS pair validates the state-machine logic; restart smoke against real Postgres validates the substrate. If the latter exposes coverage gaps, this ADR amends.
+- **Doesn't bench multi-watcher isolate budget.** Separate ship after action contract.
 
 ## Status discipline
 
-Filed **Proposed**. The in-memory FAIL→PASS pair (24/24 RED at commit `a06b49b`, 24/24 GREEN at commit `831d5f3`, both in this PR) validates the unit-level state-machine logic. Promotion to `Accepted` happens only after: (a) the next PR's Postgres adapter produces a corresponding GREEN restart-smoke receipt against a real Pro branch, and (b) the operator (Diego) has reviewed both this ADR and the substrate-level evidence. Per CLAUDE.md § "ADR status discipline" — no momentum-based acceptance.
+Filed **Proposed**. Both promotion gates have produced GREEN receipts:
+- (a) Unit-level: PR #30 captured 24/24 RED (`a06b49b`) → 24/24 GREEN (`831d5f3`).
+- (b) Substrate-level: this PR captured 3/3 GREEN against real host Postgres (10.97s wall).
+
+Awaiting operator (Diego) review of both PRs to promote to `Accepted`. Per CLAUDE.md § "ADR status discipline" — no momentum-based acceptance, even when both predicted receipts land.
 
 ## Back-refs
 
