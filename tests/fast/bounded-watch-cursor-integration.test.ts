@@ -299,6 +299,211 @@ describe("boundedWatch — release(dlq) on subscribe failure", () => {
   });
 });
 
+describe("boundedWatch — expired-lease takeover (S2)", () => {
+  it("a different holder steals an expired lease and runs to commit", async () => {
+    let nowMs = Date.parse("2026-05-03T00:00:00Z");
+    const store = makeInMemoryCursorStore({ now: () => new Date(nowMs) });
+
+    // H1 holds a 100ms lease with prior commit, then "dies" (no release).
+    await store.acquire(W, H1, 100);
+    await store.commit(W, H1, {
+      last_processed_pk: "pk-001",
+      last_processed_at: "2026-05-03T00:00:00Z",
+      idempotency_key: "k-001",
+    });
+    // Note: H1's status is "committed" with lease still held — typical
+    // mid-batch crash shape. Lease expires after the simulated 200ms gap.
+    nowMs += 200;
+
+    const { adapter, emit, waitForSubscribe } = makeAdapter();
+    const promise = boundedWatch({
+      adapter,
+      table: TABLE,
+      predicate: { event: "*" },
+      max_events: 2,
+      timeout_ms: 1_000,
+      cursor: { store, watcher_id: W, lease_holder: H2, pkExtractor: pkFromId },
+    });
+    await waitForSubscribe();
+    emit(makeEvent("pk-001")); // replay — filtered (<= prior watermark)
+    emit(makeEvent("pk-002"));
+    emit(makeEvent("pk-003"));
+    const out = await promise;
+
+    expect(out.events.map(pkFromId)).toEqual(["pk-002", "pk-003"]);
+    const row = await store.read(W);
+    expect(row?.last_processed_pk).toBe("pk-003");
+    expect(row?.lease_holder).toBeNull();
+    expect(row?.status).toBe("idle");
+  });
+});
+
+describe("boundedWatch — max_events:1 loop shim (S3)", () => {
+  it("3 iterations advance the cursor monotonically", async () => {
+    const store = makeInMemoryCursorStore();
+    const W3 = "shim-watcher";
+
+    for (const pk of ["pk-1", "pk-2", "pk-3"]) {
+      const { adapter, emit, waitForSubscribe } = makeAdapter();
+      const promise = boundedWatch({
+        adapter,
+        table: TABLE,
+        predicate: { event: "*" },
+        max_events: 1,
+        timeout_ms: 500,
+        cursor: { store, watcher_id: W3, lease_holder: H1, pkExtractor: pkFromId },
+      });
+      await waitForSubscribe();
+      emit(makeEvent(pk));
+      const out = await promise;
+      expect(out.events).toHaveLength(1);
+      expect(out.closed_reason).toBe("max_events");
+    }
+
+    const row = await store.read(W3);
+    expect(row?.last_processed_pk).toBe("pk-3");
+    expect(row?.idempotency_key).toBe("pk-3");
+    expect(row?.status).toBe("idle");
+  });
+});
+
+describe("boundedWatch — subscribe-throws + release-throws (M1)", () => {
+  it("when both subscribe and release throw, the original subscribe error wins", async () => {
+    const store = makeInMemoryCursorStore();
+    const releaseSpy = vi.spyOn(store, "release").mockRejectedValueOnce(new Error("release boom"));
+    const adapter = makeAdapterThatFailsToSubscribe();
+
+    await expect(
+      boundedWatch({
+        adapter,
+        table: TABLE,
+        predicate: { event: "*" },
+        max_events: 1,
+        timeout_ms: 5_000,
+        cursor: { store, watcher_id: W, lease_holder: H1, pkExtractor: pkFromId },
+      }),
+    ).rejects.toThrow("subscribe boom");
+
+    expect(releaseSpy).toHaveBeenCalled();
+  });
+});
+
+describe("boundedWatch — commit returns !ok (C2)", () => {
+  it("throws CURSOR_COMMIT_FAILED and still releases the lease", async () => {
+    const store = makeInMemoryCursorStore();
+    vi.spyOn(store, "commit").mockResolvedValueOnce({
+      ok: false,
+      deduped: false,
+      reason: "wrong_holder",
+    });
+    const releaseSpy = vi.spyOn(store, "release");
+
+    const { adapter, emit, waitForSubscribe } = makeAdapter();
+    const promise = boundedWatch({
+      adapter,
+      table: TABLE,
+      predicate: { event: "*" },
+      max_events: 1,
+      timeout_ms: 1_000,
+      cursor: { store, watcher_id: W, lease_holder: H1, pkExtractor: pkFromId },
+    });
+    await waitForSubscribe();
+    emit(makeEvent("pk-1"));
+
+    await expect(promise).rejects.toMatchObject({
+      code: "CURSOR_COMMIT_FAILED",
+      name: "BoundedWatchCursorError",
+      reason: "wrong_holder",
+    });
+    await expect(promise).rejects.toBeInstanceOf(BoundedWatchCursorError);
+
+    // Release was called (best-effort) even though commit threw.
+    expect(releaseSpy).toHaveBeenCalledWith(W, H1, "idle");
+  });
+
+  it("does NOT throw when commit returns deduped (ok: true, deduped: true)", async () => {
+    const store = makeInMemoryCursorStore();
+    vi.spyOn(store, "commit").mockResolvedValueOnce({ ok: true, deduped: true });
+
+    const { adapter, emit, waitForSubscribe } = makeAdapter();
+    const promise = boundedWatch({
+      adapter,
+      table: TABLE,
+      predicate: { event: "*" },
+      max_events: 1,
+      timeout_ms: 1_000,
+      cursor: { store, watcher_id: W, lease_holder: H1, pkExtractor: pkFromId },
+    });
+    await waitForSubscribe();
+    emit(makeEvent("pk-1"));
+
+    const out = await promise;
+    expect(out.events).toHaveLength(1);
+  });
+});
+
+describe("boundedWatch — heartbeat during long-running call (S1)", () => {
+  it("fires heartbeat at the configured cadence while collecting", async () => {
+    const store = makeInMemoryCursorStore();
+    const heartbeatSpy = vi.spyOn(store, "heartbeat");
+
+    const { adapter } = makeAdapter();
+    const out = await boundedWatch({
+      adapter,
+      table: TABLE,
+      predicate: { event: "*" },
+      max_events: 5,
+      timeout_ms: 250,
+      cursor: {
+        store,
+        watcher_id: W,
+        lease_holder: H1,
+        pkExtractor: pkFromId,
+        lease_ttl_ms: 200,
+        heartbeat_interval_ms: 50,
+      },
+    });
+
+    expect(out.events).toHaveLength(0);
+    expect(out.closed_reason).toBe("timeout");
+    // ~250ms / 50ms ≈ 5 ticks; allow ≥2 for jitter slack.
+    expect(heartbeatSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+    for (const args of heartbeatSpy.mock.calls) {
+      expect(args).toEqual([W, H1]);
+    }
+  });
+
+  it("clears the heartbeat timer on graceful exit (no calls after return)", async () => {
+    const store = makeInMemoryCursorStore();
+    const heartbeatSpy = vi.spyOn(store, "heartbeat");
+
+    const { adapter, emit, waitForSubscribe } = makeAdapter();
+    const promise = boundedWatch({
+      adapter,
+      table: TABLE,
+      predicate: { event: "*" },
+      max_events: 1,
+      timeout_ms: 5_000,
+      cursor: {
+        store,
+        watcher_id: W,
+        lease_holder: H1,
+        pkExtractor: pkFromId,
+        lease_ttl_ms: 200,
+        heartbeat_interval_ms: 50,
+      },
+    });
+    await waitForSubscribe();
+    emit(makeEvent("pk-1"));
+    await promise;
+    const callsAtReturn = heartbeatSpy.mock.calls.length;
+
+    // Wait past 2 more heartbeat intervals; spy must not advance.
+    await new Promise((r) => setTimeout(r, 150));
+    expect(heartbeatSpy.mock.calls.length).toBe(callsAtReturn);
+  });
+});
+
 describe("boundedWatch — restart resume across calls", () => {
   it("preserves cursor across two boundedWatch calls", async () => {
     const store: CursorStore = makeInMemoryCursorStore();

@@ -60,6 +60,14 @@ export interface BoundedWatchCursorConfig {
   /** Default 30_000 ms. */
   lease_ttl_ms?: number;
   /**
+   * Heartbeat cadence — fires `store.heartbeat()` while boundedWatch is
+   * collecting, so a long-running call (timeout_ms > lease_ttl_ms) doesn't
+   * lose its lease mid-flight. Defaults to lease_ttl_ms / 3, floored at 1s.
+   * Heartbeat failures are silenced; commit will surface the real wrong_holder
+   * if the lease was actually lost.
+   */
+  heartbeat_interval_ms?: number;
+  /**
    * Extracts the monotonic PK from an event for cursor advancement.
    * Operator owns serialization (ULID, ISO timestamp, padded int) — must
    * sort lexicographically.
@@ -81,8 +89,9 @@ export interface BoundedWatchInput extends WatchTableInput {
 
 export class BoundedWatchCursorError extends Error {
   constructor(
-    public readonly code: "CURSOR_BUSY" | "CURSOR_DLQ",
+    public readonly code: "CURSOR_BUSY" | "CURSOR_DLQ" | "CURSOR_COMMIT_FAILED",
     message: string,
+    public readonly reason?: string,
   ) {
     super(message);
     this.name = "BoundedWatchCursorError";
@@ -219,7 +228,9 @@ export async function boundedWatch(input: BoundedWatchInput): Promise<WatchTable
   // Cursor lease acquisition (opt-in). Acquired BEFORE subscribe so a
   // busy lease can short-circuit without burning a Realtime websocket.
   // ---------------------------------------------------------------------
-  let cursorWatermark = ""; // PK threshold for the substrate-replay filter
+  // PK threshold for the substrate-replay filter. null = no prior cursor
+  // state (first run for this watcher_id), "" treated as "filter nothing".
+  let priorCursorPk: string | null = null;
   if (input.cursor) {
     const { store, watcher_id, lease_holder } = input.cursor;
     const lease_ttl_ms = input.cursor.lease_ttl_ms ?? 30_000;
@@ -231,7 +242,7 @@ export async function boundedWatch(input: BoundedWatchInput): Promise<WatchTable
         `cursor ${watcher_id} is ${reason === "CURSOR_DLQ" ? "in dlq (terminal)" : `held by ${acquired.row.lease_holder}`}`,
       );
     }
-    cursorWatermark = acquired.row.last_processed_pk;
+    priorCursorPk = acquired.row.last_processed_pk;
   }
 
   const eventArrived = new Promise<"max_events">((resolve) => {
@@ -242,9 +253,9 @@ export async function boundedWatch(input: BoundedWatchInput): Promise<WatchTable
     if (!matchesEvent(ev, input.predicate)) return;
     // Cursor watermark filter: skip events whose PK is <= the cursor's
     // last_processed_pk (defensive against substrate replay on reconnect).
-    if (input.cursor && cursorWatermark !== "") {
+    if (input.cursor && priorCursorPk !== null && priorCursorPk !== "") {
       const pk = input.cursor.pkExtractor(ev);
-      if (pk <= cursorWatermark) return;
+      if (pk <= priorCursorPk) return;
     }
     // Hard cap: max_events is the max events stored, regardless of how the
     // adapter delivers them. Without this guard, a synchronous burst (or a
@@ -264,51 +275,88 @@ export async function boundedWatch(input: BoundedWatchInput): Promise<WatchTable
     await input.adapter.subscribe({ table: input.table, onEvent });
   } catch (err) {
     if (input.cursor) {
+      // Best-effort release; if release also throws, the original subscribe
+      // error is what the caller needs to see.
       await input.cursor.store
         .release(input.cursor.watcher_id, input.cursor.lease_holder, "dlq", "subscribe_failed")
-        .catch(() => {
-          /* best-effort release; caller surfaces the original subscribe error */
-        });
+        .catch(() => {});
     }
     throw err;
   }
 
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   try {
+    // Heartbeat while we collect — protects long-running calls
+    // (timeout_ms > lease_ttl_ms) from losing the lease mid-flight.
+    if (input.cursor) {
+      const lease_ttl_ms = input.cursor.lease_ttl_ms ?? 30_000;
+      const heartbeatMs =
+        input.cursor.heartbeat_interval_ms ?? Math.max(1_000, Math.floor(lease_ttl_ms / 3));
+      const cursor = input.cursor;
+      heartbeatTimer = setInterval(() => {
+        // Silenced — commit/release will surface a real wrong_holder.
+        cursor.store.heartbeat(cursor.watcher_id, cursor.lease_holder).catch(() => {});
+      }, heartbeatMs);
+    }
+
     const timeoutPromise = new Promise<"timeout">((resolve) => {
       timeoutId = setTimeout(() => resolve("timeout"), input.timeout_ms);
     });
     const closed_reason = await Promise.race([eventArrived, timeoutPromise]);
 
-    // Cursor commit + release on success path (after we know what we collected).
-    if (input.cursor && events.length > 0) {
-      const cursor = input.cursor;
-      // Pick the lexicographically-highest PK we saw this batch.
-      let highestPk = "";
-      let highestEvent: ChangeEvent | null = null;
-      for (const ev of events) {
-        const pk = cursor.pkExtractor(ev);
-        if (pk > highestPk) {
-          highestPk = pk;
-          highestEvent = ev;
-        }
-      }
-      if (highestEvent) {
-        const idempExtract = cursor.idempotencyExtractor ?? cursor.pkExtractor;
-        await cursor.store.commit(cursor.watcher_id, cursor.lease_holder, {
-          last_processed_pk: highestPk,
-          last_processed_at: highestEvent.commit_timestamp,
-          idempotency_key: idempExtract(highestEvent),
-        });
-      }
+    // Stop the heartbeat as soon as collection ends — commit+release runs
+    // synchronously after this point, no need to keep extending the lease.
+    if (heartbeatTimer !== undefined) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = undefined;
     }
+
+    // Cursor commit + release: tightly coupled. Release MUST run even if
+    // commit throws or returns !ok, otherwise the lease leaks until expiry.
     if (input.cursor) {
-      await input.cursor.store.release(input.cursor.watcher_id, input.cursor.lease_holder, "idle");
+      const cursor = input.cursor;
+      let commitError: BoundedWatchCursorError | null = null;
+      try {
+        if (events.length > 0) {
+          // Pick the lexicographically-highest PK we saw this batch.
+          let highestPk = "";
+          let highestEvent: ChangeEvent | null = null;
+          for (const ev of events) {
+            const pk = cursor.pkExtractor(ev);
+            if (pk > highestPk) {
+              highestPk = pk;
+              highestEvent = ev;
+            }
+          }
+          if (highestEvent) {
+            const idempExtract = cursor.idempotencyExtractor ?? cursor.pkExtractor;
+            const result = await cursor.store.commit(cursor.watcher_id, cursor.lease_holder, {
+              last_processed_pk: highestPk,
+              last_processed_at: highestEvent.commit_timestamp,
+              idempotency_key: idempExtract(highestEvent),
+            });
+            if (!result.ok) {
+              commitError = new BoundedWatchCursorError(
+                "CURSOR_COMMIT_FAILED",
+                `cursor commit failed: ${result.reason ?? "unknown"}`,
+                result.reason,
+              );
+            }
+          }
+        }
+      } finally {
+        // Best-effort release; if commit failed for wrong_holder/no_lease,
+        // release will likely also fail — swallow so the commit error wins.
+        await cursor.store.release(cursor.watcher_id, cursor.lease_holder, "idle").catch(() => {});
+      }
+      if (commitError) throw commitError;
     }
 
     return { events, closed_reason };
   } finally {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
+    if (heartbeatTimer !== undefined) clearInterval(heartbeatTimer);
     await input.adapter.unsubscribe();
   }
 }

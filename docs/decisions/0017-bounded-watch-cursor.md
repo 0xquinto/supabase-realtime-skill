@@ -81,6 +81,8 @@ The fast test suite (this PR's scaffold) targets the in-memory implementation. T
 
 ### 4. Migration shape (cursor → SDK boundary)
 
+> **As-shipped semantics differ — see § 5 "Why batch-shape, not per-event" amendment for the integration that landed in PR #32.** Per-event commit (originally drafted in this section) requires the action contract layer; the cursor wires into `boundedWatch` at batch-shape granularity instead.
+
 `boundedWatch` gains an optional `cursor?: BoundedWatchCursorConfig` parameter where:
 ```ts
 interface BoundedWatchCursorConfig {
@@ -88,6 +90,7 @@ interface BoundedWatchCursorConfig {
   watcher_id: string;
   lease_holder: string;          // unique per isolate; caller supplies
   lease_ttl_ms?: number;         // default 30_000
+  heartbeat_interval_ms?: number;  // default lease_ttl_ms / 3, floor 1s
   pkExtractor: (event: ChangeEvent) => string;
   idempotencyExtractor?: (event: ChangeEvent) => string;  // defaults to pkExtractor
 }
@@ -97,10 +100,17 @@ When omitted, behavior is unchanged (current stateless mode). When supplied (**b
 
 - Before subscribe: `acquire` lease; if busy or `dlq`, throw `BoundedWatchCursorError({ code: "CURSOR_BUSY" | "CURSOR_DLQ" })`.
 - During event collection: events whose `pkExtractor(ev) <= cursor.last_processed_pk` are filtered out (defensive against substrate replay during reconnect).
-- On `subscribe` failure: `release('dlq', "subscribe_failed")` then re-throw.
+- During event collection: a heartbeat timer fires `store.heartbeat(watcher_id, lease_holder)` at `heartbeat_interval_ms` cadence so a long-running call (`timeout_ms > lease_ttl_ms`) doesn't lose its lease mid-flight. Heartbeat failures are silenced — commit will surface a real `wrong_holder` if the lease was actually lost.
+- On `subscribe` failure: `release('dlq', "subscribe_failed")` then re-throw. If `release` itself throws, the original subscribe error wins (best-effort release).
 - On graceful exit (max_events / timeout): if events were collected, find the lexicographically-highest PK among them, `commit({ last_processed_pk, last_processed_at, idempotency_key })`. Then `release('idle')`. If no events, no commit (cursor unchanged); `release('idle')`.
+- On commit returning `{ ok: false, reason }`: throw `BoundedWatchCursorError({ code: "CURSOR_COMMIT_FAILED", reason })` AFTER best-effort `release('idle')`. The lease never leaks; commit failure is visible to the caller.
 
 Backward compat: callers that don't pass `cursor` are unaffected. v0.3.x bytes continue to work as today.
+
+**Error envelope:**
+- `CURSOR_BUSY` — different holder owns an unexpired lease. Caller can back off and retry.
+- `CURSOR_DLQ` — terminal failure state on the cursor. Operator must inspect + manually reset.
+- `CURSOR_COMMIT_FAILED` — commit returned `!ok`; `reason` carries `non_monotonic | wrong_holder | no_lease | dlq_terminal`. Lease has been released best-effort; caller surfaces to its action contract.
 
 ### 5. Why batch-shape, not per-event (amendment 2026-05-03)
 
@@ -109,7 +119,8 @@ The original migration shape above mentioned "per-event commit" semantics: invok
 This PR ships **batch-shape integration**: cursor advances at the end of `boundedWatch`'s call (not per event). Semantics:
 - Restart-safe at the batch boundary: caller invokes `boundedWatch({ cursor })` repeatedly; each call resumes where the previous one left off (skipping any substrate-replayed events).
 - At-most-once *delivery* to the caller (caller's batch is what was committed); at-least-seen *advance* (cursor records the high-water mark of what was returned).
-- Lease coordination: prevents two isolates running the same `watcher_id` from racing the same cursor row.
+- Soft-lock with heartbeat: an in-flight `boundedWatch` extends its lease at `heartbeat_interval_ms` cadence (default `lease_ttl_ms / 3`, floor 1s), so a long `timeout_ms` doesn't drop the lease mid-call. The lease is still time-bounded — if the isolate dies, the lease expires and another holder can steal it (preserving `last_processed_pk`).
+- Tightly-coupled commit + release: commit and release are paired in an inner `try/finally` so the lease is always released, even if commit throws or returns `!ok`. A `CURSOR_COMMIT_FAILED` error then surfaces to the caller — the lease never leaks past the call.
 
 The per-event commit shape (with the action contract) lands in a follow-up ADR. The cursor row schema + state machine + persistence contract are unchanged between batch-shape and per-event-shape; the call-site integration is the only thing that differs.
 
