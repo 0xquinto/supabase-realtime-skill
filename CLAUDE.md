@@ -199,6 +199,21 @@ When bumping any version in `supabase/functions/mcp/deno.json`: `cd supabase/fun
 
 The `npm:supabase-realtime-skill@^X.Y.Z/server` import range in `supabase/functions/mcp/deno.json` cannot be bumped in the same PR as the `package.json` version bump — the new npm version doesn't exist until the tag fires the publish workflow, so `deno cache --reload` would fail at lock-regen time. Pattern: (1) `feat/vX.Y.Z-tag` PR bumps `package.json` + CHANGELOG only; (2) merge → run the § "Release ritual" block above (`git tag` → publish workflow → `npm view`); (3) `feat/edge-redeploy-vX.Y.Z` PR bumps `deno.json` and **composes with § "Deno lock regen" above** (`rm -f deno.lock && deno cache --reload index.ts && deno check index.ts`); (4) operator runs `supabase functions deploy` after merge; (5) commit smoke receipt to `logs/smoke-edge-deploy/`. The v0.3.0 ship loop (PRs #23 / #24 / #25) is the reference shape.
 
+### Pre-PR review (pr-review-toolkit plugin)
+
+Toolkit at `~/.claude/plugins/cache/claude-plugins-official/pr-review-toolkit/` — 6 agents + `/pr-review-toolkit:review-pr [aspects]` slash command. **Default for any non-trivial code PR**: invoke `pr-review-toolkit:code-reviewer` against the staged diff before opening the PR. Iterate fixes in the same branch (one commit per round). PR #32 evidence: one code-reviewer pass found 9 issues — 2 critical silent-failure modes (release leak in commit-throw path, swallowed commit-fail return) that all 11 fast tests passed around. Fixed in commit 73cd5a2.
+
+**Targeted adjuncts (invoke alongside code-reviewer when applicable):**
+- `silent-failure-hunter` — when the diff adds try/catch, fallback logic, or any error-suppression shape.
+- `type-design-analyzer` — when introducing new exported types (cursor / config / contract shapes).
+- `pr-test-analyzer` — when smoke or fast tests are net-new (not just modified).
+- `comment-analyzer` — when adding heavy docstrings, ADR-linked inline comments, or method docs.
+- `code-simplifier` — only after review iteration is done. Use sparingly (drifts toward refactoring beyond task scope).
+
+**When NOT to invoke:** doc-only PRs (CLAUDE.md, ADR text, handoff, recon), tiny diffs (<20 LOC single-file), PRs where the issue is already known with a fix in flight. The toolkit's marginal value drops fast on small surface area; don't burn a turn confirming what's obvious.
+
+**Comprehensive sweep:** `/pr-review-toolkit:review-pr` runs all applicable aspects against `git diff` in one shot — useful for the final pre-merge pass on a multi-file PR. Filter for confidence ≥80 (the agents' default threshold) so noise stays low.
+
 ## Where to put new info
 
 | Kind | Lives in |
