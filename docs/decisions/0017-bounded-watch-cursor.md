@@ -1,9 +1,9 @@
 # ADR 0017: bounded-watch persistent cursor — restart-safe at-least-once with idempotency-key dedup
 
 **Date:** 2026-05-03
-**Status:** Proposed (design locked from [recon 2026-05-03](../recon/2026-05-03-bounded-watch-as-tool-recon.md); FAIL test scaffold lands with this ADR; impl + PASS receipts ship in subsequent PR)
+**Status:** Proposed (design locked from [recon 2026-05-03](../recon/2026-05-03-bounded-watch-as-tool-recon.md); FAIL receipt + GREEN impl receipt both captured in this same PR — single-PR FAIL→fix→PASS shape mirroring [ADR-0013](0013-private-channel-broadcast-authorization.md))
 **Recommender:** Claude Opus 4.7 (assistant)
-**Decider:** Diego Gomez (will accept after the cursor impl produces FAIL→PASS receipts on the test scaffold)
+**Decider:** Diego Gomez (will promote to Accepted after operator review of this PR)
 
 ## Context
 
@@ -94,24 +94,23 @@ Backward compat: callers that don't pass `cursor` are unaffected. v0.3.x bytes c
 
 The FAIL→PASS test discipline (per ADR-0011 / 0013) commits to:
 
-**Predicted FAIL (this PR — captured at filing):**
-- `tests/fast/cursor.test.ts` — state-machine test suite (24 cases across 6 describe blocks: read, acquire, heartbeat, commit, release, restart-resume) referencing `makeInMemoryCursorStore()`. Impl is stub (throws `ADR-0017 cursor impl not yet shipped`). **Captured: 24/24 FAIL with that error at `bun run test:fast` on this branch.** Other 50 fast tests + typecheck + lint all PASS — no regression. This is the RED state.
+**FAIL receipt (commit `a06b49b`, 2026-05-03 ~10:00 PT):**
+- `tests/fast/cursor.test.ts` — state-machine test suite (24 cases across 6 describe blocks: read, acquire, heartbeat, commit, release, restart-resume) referencing `makeInMemoryCursorStore()`. Impl was stub (throws `ADR-0017 cursor impl not yet shipped`). **Captured: 24/24 FAIL with that error at `bun run test:fast`.** 50 pre-existing fast tests + typecheck + lint all PASS — no regression.
 
-**Predicted PASS (next PR):**
-- Same test file, no test changes; `makeInMemoryCursorStore()` impl lands. Expected: 24/24 cases pass. Same code path between FAIL and PASS — only the impl swap.
+**PASS receipt (this same PR, 2026-05-03 ~10:08 PT):**
+- Same test file, ZERO test changes; `makeInMemoryCursorStore()` impl shipped. **Captured: 74/74 fast tests PASS (50 pre-existing + 24 cursor cases).** Typecheck PASS, lint PASS, total wall ~1.43s. The same code path that emitted "ADR-0017 cursor impl not yet shipped" 24 times now emits 24 green checks — only the impl swapped between RED and GREEN.
 
-**Predicted PASS (next-after-next PR):**
+**Predicted PASS (next PR — Postgres adapter + restart smoke):**
 - New `tests/smoke/cursor-restart.smoke.test.ts` against a real Pro branch. Spawns a watcher with `cursor` supplied; injects 5 INSERTs; kills the simulated isolate after the 3rd commit; reacquires from a fresh isolate; injects 2 more INSERTs; verifies the user's action callback received exactly 5 distinct events (no duplicates, no gaps), and the cursor row's `last_processed_pk` is the 5th INSERT's PK.
 
-If the predicted-FAIL test scaffold doesn't actually fail at scaffold-time, that's a leak (impl prematurely satisfies — likely indicates the test suite isn't asserting tight enough). If the predicted-PASS doesn't pass at impl-time, the cursor design is wrong and this ADR retracts (Status changes to `Rejected` with the discovery as the rationale).
+The empirical FAIL→PASS pair on the in-memory store validates the state-machine design at the unit level. The Postgres+restart-smoke pair (next PR) validates it at the substrate level. If the latter exposes a behavior the in-memory tests didn't cover, this ADR amends; if it doesn't, ADR-0017 promotes to Accepted at that point.
 
 ## Cost ceiling
 
-- **This PR:** ~half day. ADR + types + stub + ~25-case test scaffold confirmed RED. No infrastructure required.
-- **Next PR (in-memory PASS):** ~1 day. Pure-TS state machine impl + fast tests green.
-- **Next-after-next PR (Postgres + restart smoke):** ~1.5 days + ~$0.10 in branch provisioning. Migration for `realtime_skill_cursors` + Postgres adapter + restart smoke test.
+- **This PR (actual):** ~1.5h wall. ADR + types + stub + 24-case scaffold + in-memory impl + FAIL→PASS receipts in single round-trip. Cheaper than the original "two-PR" plan because the design was tight enough that the impl was direct from the state machine.
+- **Next PR (Postgres adapter + restart smoke):** ~1.5 days + ~$0.10 in branch provisioning. Migration for `realtime_skill_cursors` + Postgres adapter + `tests/smoke/cursor-restart.smoke.test.ts`.
 
-Total: ~3-3.5 days for the cursor layer. Action contract (the next ADR after 0017) and multi-watcher isolate-budget bench are separate ships.
+Total: ~2 days for the cursor layer. Action contract (the next ADR after 0017) and multi-watcher isolate-budget bench are separate ships.
 
 ## Out of scope (and why)
 
@@ -123,9 +122,10 @@ Total: ~3-3.5 days for the cursor layer. Action contract (the next ADR after 001
 
 ## What this ADR doesn't do
 
-- **Doesn't ship the impl.** Only types + stub + RED test scaffold. The PR after this one ships in-memory impl (PASS).
+- **Doesn't ship the Postgres adapter.** In-memory store only. The next PR ships `makePostgresCursorStore` + the `realtime_skill_cursors` migration + a restart smoke test against a real Pro branch.
+- **Doesn't wire the cursor into `boundedWatch` yet.** `CursorStore` is a standalone primitive; threading the optional `cursor?: { store, watcher_id, lease_ttl_ms }` parameter into `boundedWatch`'s subscription loop is the PR after that.
 - **Doesn't change `boundedWatch`'s default behavior.** `cursor` is opt-in; v0.3.x consumers see no API surface change.
-- **Doesn't promise the design holds.** The point of FAIL→PASS receipts is that the design is falsifiable. If the in-memory impl can't satisfy the 25 test cases without semantic compromise, the cursor row shape or state machine is wrong and this ADR retracts.
+- **Doesn't promise the design holds at substrate level.** The in-memory FAIL→PASS pair validates the state-machine logic; restart smoke against real Postgres validates the substrate. If the latter exposes coverage gaps, this ADR amends.
 
 ## Status discipline
 
