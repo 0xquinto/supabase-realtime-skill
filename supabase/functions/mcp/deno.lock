@@ -2,7 +2,7 @@
   "version": "5",
   "specifiers": {
     "npm:@modelcontextprotocol/sdk@^1.27.1": "1.29.0_zod@3.25.76",
-    "npm:supabase-realtime-skill@0.2": "0.2.0"
+    "npm:supabase-realtime-skill@0.3": "0.3.0"
   },
   "npm": {
     "@anthropic-ai/sdk@0.92.0_zod@3.25.76": {
@@ -566,8 +566,8 @@
     "statuses@2.0.2": {
       "integrity": "sha512-DvEy55V3DB7uknRo+4iOGT5fP1slR8wQohVdknigZPMpMstaKJQWhwiYBACJE3Ul2pTnATihhBYnRhZQHGBiRw=="
     },
-    "supabase-realtime-skill@0.2.0": {
-      "integrity": "sha512-vD3yLgmbmuF8GdkJzJMcRaGOzMtT4H7rfF8A5B6LUWVGuIDr5TtDwhbukPceQk+3xdG+jUt0I5g8wcQOY9Knnw==",
+    "supabase-realtime-skill@0.3.0": {
+      "integrity": "sha512-pNfaXj1kQ6LpI+xUWMUlowaMCWNFuA+FhfhgqBMbZqpDMf/+XatS72YWf9IGBg77odOKm4YjDXctyyAg65lU9w==",
       "dependencies": [
         "@anthropic-ai/sdk",
         "@modelcontextprotocol/sdk",
@@ -630,7 +630,7 @@
       "npm:@modelcontextprotocol/sdk@^1.27.1",
       "npm:@supabase/supabase-js@^2.105.1",
       "npm:postgres@3.4.9",
-      "npm:supabase-realtime-skill@0.2",
+      "npm:supabase-realtime-skill@0.3",
       "npm:zod@3.25.76"
     ]
   }
