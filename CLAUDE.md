@@ -16,8 +16,8 @@ Origin context: [`docs/upstream/`](docs/upstream/README.md) carries the recon, s
 bun install
 cp .env.example .env                 # populate ANTHROPIC_API_KEY, EVAL_SUPABASE_PAT, EVAL_HOST_PROJECT_REF
 
-bun run test:fast                    # 49 offline tests (~1s)
-bun run test:smoke                   # 8 online smoke tests against real branches (~3-6 min, requires env)
+bun run test:fast                    # 50 offline tests (~1s)
+bun run test:smoke                   # 13 online smoke tests across 8 files (~3-6 min, requires env)
 bun run typecheck                    # tsc --noEmit
 bun run lint                         # biome check
 bun run lint:fix                     # biome check --write
@@ -30,6 +30,16 @@ bun run eval/runner.ts ci-full    # n=100 (~$2-3, 30 min)
 # Multi-model probe (default: claude-haiku-4-5):
 EVAL_TRIAGE_MODEL=claude-sonnet-4-6 bun run eval/runner.ts ci-full
 ```
+
+### Release ritual (run only after a `release(vX.Y.Z): ...` PR merges to main)
+
+```bash
+git tag vX.Y.Z && git push origin vX.Y.Z         # fires .github/workflows/publish.yml via OIDC
+gh run watch $(gh run list --workflow=publish.yml --limit 1 --json databaseId -q '.[0].databaseId')
+npm view supabase-realtime-skill@X.Y.Z version dist-tags   # verify publish landed
+```
+
+The Edge Function redeploy is a *separate* PR after this — see § "Release-PR vs Edge-redeploy-PR" below for the load-bearing reason.
 
 Operator setup: [`references/edge-deployment.md`](references/edge-deployment.md). Requires Supabase Pro + a dedicated host project + a fine-grained PAT.
 
@@ -58,7 +68,7 @@ Operator setup: [`references/edge-deployment.md`](references/edge-deployment.md)
 | `docs/recon/` | pre-ADR research docs (`YYYY-MM-DD-<topic>-recon.md`); produces evidence the ADR commits on |
 | `docs/spike-findings.md` | T7 5s warm-up + T8 .ts-extension reshape + Phase 1 gate-PASSED trail |
 | `docs/writeup.md` | the headline narrative |
-| `docs/ship-status.md` | what's done + 5 follow-ups awaiting operator action |
+| `docs/ship-status.md` | v0.1.0-era ship snapshot (historical). Current operator follow-ups live in CLAUDE.md § Status. |
 
 ## Non-obvious conventions (the load-bearing ones)
 
@@ -113,6 +123,10 @@ The `!` triggers on import — fails typecheck-driven imports, fails CI runs wit
 ### ADR status discipline
 
 Don't mark an ADR `Accepted` until the operator explicitly decides. `Proposed` is the safe default for design choices the operator hasn't ruled on. The pre-registration loop's whole point is that outcomes (accept / partial / reject) come from evidence + operator judgment, not from drafting momentum.
+
+### npm tag judgment ≠ project milestone label
+
+ADRs sometimes label a milestone "vX.Y.Z ship surface" (project narrative). That label does NOT determine the npm tag. Cut the npm tag against what the recon's fallback path actually specified — ADR-0016's recon explicitly said "v1.0.0 = both [smoke surface + manifest n=300] shipped within the same calendar week, otherwise the smoke PR is `0.3.0` and v1.0.0 stays unclaimed." When drafting a release PR, re-read the recon's tag-decision row before settling on a number; project narrative ≠ SemVer event.
 
 ### Branch + commit conventions
 
@@ -179,16 +193,19 @@ The Supabase platform gateway returns 406 on `GET /functions/v1/mcp/health` if o
 
 When bumping any version in `supabase/functions/mcp/deno.json`: `cd supabase/functions/mcp && rm -f deno.lock && deno cache --reload index.ts && deno check index.ts`. Without this, `deno.lock` and the deployed bundle can drift (source-tree-vs-deployed alignment was the ADR-0015 anomaly).
 
+### Release-PR vs Edge-redeploy-PR are always two separate PRs
+
+The `npm:supabase-realtime-skill@^X.Y.Z/server` import range in `supabase/functions/mcp/deno.json` cannot be bumped in the same PR as the `package.json` version bump — the new npm version doesn't exist until the tag fires the publish workflow, so `deno cache --reload` would fail at lock-regen time. Pattern: (1) `feat/vX.Y.Z-tag` PR bumps `package.json` + CHANGELOG only; (2) merge → run the § "Release ritual" block above (`git tag` → publish workflow → `npm view`); (3) `feat/edge-redeploy-vX.Y.Z` PR bumps `deno.json` and **composes with § "Deno lock regen" above** (`rm -f deno.lock && deno cache --reload index.ts && deno check index.ts`); (4) operator runs `supabase functions deploy` after merge; (5) commit smoke receipt to `logs/smoke-edge-deploy/`. The v0.3.0 ship loop (PRs #23 / #24 / #25) is the reference shape.
+
 ## Where to put new info
 
 | Kind | Lives in |
 |---|---|
-| New design (v0.2 etc.) | `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` |
-| Implementation plan for a spec | `docs/superpowers/plans/YYYY-MM-DD-<topic>.md` |
+| Pre-ADR research (closing a gap before deciding) | `docs/recon/YYYY-MM-DD-<topic>-recon.md` |
+| Architecture decision (commits the design + falsifiable predicted effect) | `docs/decisions/NNNN-<slug>.md` |
 | Operational finding from a spike | append to `docs/spike-findings.md` |
 | Skill consumer reference | `references/<topic>.md` (linked from `SKILL.md`) |
 | External research closing a playbook gap | `playbook/research/<topic>.md` (mirror supabase-mcp-evals' pre-registered targets pattern) |
-| Architecture decision | `docs/decisions/NNNN-<slug>.md` (see directory for filed ADRs) |
 | Engineering tactics | commit messages |
 
 ## Anti-patterns (from `playbook/PLAYBOOK.md` § 8)
@@ -205,14 +222,13 @@ When bumping any version in `supabase/functions/mcp/deno.json`: `cd supabase/fun
 
 ## Status
 
-v0.2.0 shipped (worked-example bundle, ADR-0014). Latest ci-full: **99/100 action_correctness, CI low 0.946** (Sonnet 4.6, ADR-0009); Haiku 4.5 hits 96/100 post-f019-relabel (ADR-0006). Manifest gate passes on rate AND CI low; mechanical Wilson upper-CI bounds remain until n=300 (v2.0.0 manifest, ADR-0007).
+v0.3.0 shipped (E2E smoke surface, ADR-0016 — fully verified end-to-end on `0.3.0` bytes after Edge redeploy on 2026-05-03). Latest ci-full: **99/100 action_correctness, CI low 0.946** (Sonnet 4.6, ADR-0009); Haiku 4.5 hits 96/100 post-f019-relabel (ADR-0006). Manifest gate passes on rate AND CI low; mechanical Wilson upper-CI bounds remain until n=300 (v2.0.0 manifest, ADR-0007).
 
-**Shipped:** npm package published as `supabase-realtime-skill` (`v0.1.0` + `v0.1.1` + `v0.2.0` via OIDC Trusted Publisher); Edge Function deployed and live-verified end-to-end on all 5 tools (JSON-RPC `tools/list` + `tools/call` for `describe_table_changes`, `broadcast_to_channel`, `watch_table`, `subscribe_to_channel`; ADR-0015 + ADR-0016); 16 ADRs filed exercising the pre-registration loop in six outcome shapes: accept (0001/0002/0003/0005/0009/0010/0011/0013/0014/0015), partial-accept (0006/0007), reject (0008), proposed-deferral (0004/0012), proposed-pending-receipts (0016), predicted-and-empirically-refined (0013/0015).
+**Shipped:** npm package published as `supabase-realtime-skill` (`v0.1.0` + `v0.1.1` + `v0.2.0` + `v0.3.0` via OIDC Trusted Publisher); Edge Function deployed and live-verified end-to-end on all 5 tools (JSON-RPC `tools/list` + `tools/call` for `describe_table_changes`, `broadcast_to_channel`, `watch_table`, `subscribe_to_channel`; ADR-0015 + ADR-0016); 16 ADRs filed exercising the pre-registration loop in five outcome shapes: accept (0001/0002/0003/0005/0009/0010/0011/0013/0014/0015/0016), partial-accept (0006/0007), reject (0008), proposed-deferral (0004/0012), predicted-and-empirically-refined (0013/0015/0016).
 
-**CI:** `ci-fast` runs every push (typecheck + lint + 49 fast tests, ~1 min, free). `ci-full` is **manual-only** (`workflow_dispatch`) — daily cron was dropped on 2026-05-01 (~$60-90/mo of API spend reproducing identical numbers; methodology evidence is the workflow file + on-demand trigger). The tier was renamed from `ci-nightly` → `ci-full` on 2026-05-01 to stop the name from claiming a schedule it doesn't have; same workflow, same fixtures, just an honest label.
+**CI:** `ci-fast` runs every push (typecheck + lint + 50 fast tests, ~1 min, free). `ci-full` is **manual-only** (`workflow_dispatch`) — daily cron was dropped on 2026-05-01 (~$60-90/mo of API spend reproducing identical numbers; methodology evidence is the workflow file + on-demand trigger). The tier was renamed from `ci-nightly` → `ci-full` on 2026-05-01 to stop the name from claiming a schedule it doesn't have; same workflow, same fixtures, just an honest label.
 
 **Operator follow-ups:**
 1. T31 — file issue on `supabase/agent-skills` (decide: as-drafted, reshape per ADR-0004, or skip).
-2. (Optional) Set `EVAL_*` repo secrets if `ci-full` is invoked on demand. New: `EVAL_HOST_DB_URL` for the Edge `watch_table` smoke (`tests/smoke/edge-deploy.smoke.test.ts`) — host project's pooler URL. Skips cleanly if absent.
-3. Promote ADR-0016 from `Proposed` → `Accepted` when comfortable. 6/6 PASS receipts on the live Edge deploy (10.8s + 19.0s wall) plus the 20-trial spike with populated `new` content; only operator decision remains.
-4. **Manifest v2.0.0 / n=300** is the next natural ship — ADR-0017 (or ADR-0007 amendment) when the corpus expansion lands. v1.0.0 tag is gated on this + the smoke surface PR (#18) shipping in the same calendar week per [`recon`](docs/recon/2026-05-02-v1.0.0-ship-surface-recon.md) Decision 4. If manifest blocks, smoke PR ships as `0.3.0` standalone and v1.0.0 stays unclaimed.
+2. (Optional) Set `EVAL_*` repo secrets if `ci-full` is invoked on demand. `EVAL_HOST_DB_URL` is required for the Edge `watch_table` smoke (`tests/smoke/edge-deploy.smoke.test.ts`) — host project's pooler URL. Skips cleanly if absent.
+3. **Manifest v2.0.0 / n=300** is the next natural ship — ADR-0017 (or ADR-0007 amendment) when the corpus expansion lands. v1.0.0 tag is gated on this per [`recon`](docs/recon/2026-05-02-v1.0.0-ship-surface-recon.md) Decision 4. The smoke surface (ADR-0016) shipped as `0.3.0` per the recon's fallback path; v1.0.0 stays unclaimed until the manifest expansion lands and a soak window confirms `0.3.x` in the wild.
