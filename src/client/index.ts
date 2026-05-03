@@ -15,6 +15,7 @@ export {
   boundedSubscribe,
   makeSupabaseAdapter,
   makeSupabaseBroadcastAdapter,
+  BoundedWatchCursorError,
 } from "../server/realtime-client.ts";
 
 export type {
@@ -24,7 +25,24 @@ export type {
   BroadcastReceived,
   SupabaseAdapterConfig,
   BoundedWatchInput,
+  BoundedWatchCursorConfig,
 } from "../server/realtime-client.ts";
+
+// --- Cursor primitives (ADR-0017) ------------------------------------------
+export { makeInMemoryCursorStore, makePostgresCursorStore } from "../server/cursor.ts";
+
+export type {
+  CursorStore,
+  CursorRow,
+  CursorStatus,
+  CursorAdvance,
+  AcquireResult,
+  HeartbeatResult,
+  CommitResult,
+  ReleaseResult,
+  InMemoryCursorStoreConfig,
+  PostgresCursorStoreConfig,
+} from "../server/cursor.ts";
 
 // --- Schemas (Zod) + inferred types ----------------------------------------
 export {
