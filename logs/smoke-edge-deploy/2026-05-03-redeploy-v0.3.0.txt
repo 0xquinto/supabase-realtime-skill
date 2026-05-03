@@ -1,0 +1,49 @@
+# Smoke verification run on `main` after PR #24 squash-merge + Edge Function redeploy.
+#
+# Branch:           main
+# Main SHA:         7cde59ee6242ae27acd8258734da27bb3215de53 (PR #24 merge)
+# Date:             2026-05-03
+# Host project:     uetkiogzuwhzshczaajr (EVAL_HOST_PROJECT_REF)
+# npm version:      supabase-realtime-skill@0.3.0 (latest)
+# Deployed bytes:   0.3.0 (deno.json import range ^0.3.0; deno.lock pin 0.3.0)
+# MCP SDK:          @modelcontextprotocol/sdk@1.29.0 (≥ 1.27.1 floor per ADR-0016)
+#
+# Deploy command:
+#   set -a && source .env && set +a
+#   SUPABASE_ACCESS_TOKEN=$EVAL_SUPABASE_PAT supabase functions deploy \
+#     --no-verify-jwt mcp --project-ref $EVAL_HOST_PROJECT_REF
+#
+# Verification command:
+#   bun run vitest run tests/smoke/edge-deploy.smoke.test.ts
+#
+# Receipt: 6/6 PASS, 20.0s total wall.
+# Comparison to pre-redeploy run (0.2.x bytes; PR #21 receipt):
+#   watch_table:      5442ms → 5409ms  (within noise)
+#   subscribe:        3110ms → 3101ms  (within noise)
+#   total wall:       22.0s  → 20.0s   (within noise; if anything slightly faster)
+# delivered_n=1 in both runs (the +5s INSERT landed first, consistent with
+# the spike's cold-start handshake distribution).
+#
+# Closes the post-publish operator follow-up from PR #23's CHANGELOG.
+# v0.3.0 is now fully shipped end-to-end: npm + Edge Function + smoke-verified.
+
+ RUN  v2.1.9 /Users/diego/Dev/supabase-realtime-skill
+
+stdout | tests/smoke/edge-deploy.smoke.test.ts > Edge Function MCP transport (live deploy) > tools/call watch_table delivers an INSERT event end-to-end on a fresh table
+[smoke] watch_table E2E wall=5409ms delivered_n=1
+
+stdout | tests/smoke/edge-deploy.smoke.test.ts > Edge Function MCP transport (live deploy) > tools/call subscribe_to_channel receives a broadcast from an external sender
+[smoke] subscribe_to_channel E2E wall=3101ms
+
+ ✓ |smoke| tests/smoke/edge-deploy.smoke.test.ts (6 tests) 19812ms
+   ✓ Edge Function MCP transport (live deploy) > responds to JSON-RPC tools/list with all 5 tools and their schemas 1953ms
+   ✓ Edge Function MCP transport (live deploy) > liveness probe returns 200 on GET /health 1465ms
+   ✓ Edge Function MCP transport (live deploy) > tools/call describe_table_changes routes to handler and returns INVALID_TABLE for missing table 1695ms
+   ✓ Edge Function MCP transport (live deploy) > tools/call broadcast_to_channel returns success on a public channel 1973ms
+   ✓ Edge Function MCP transport (live deploy) > tools/call watch_table delivers an INSERT event end-to-end on a fresh table 7745ms
+   ✓ Edge Function MCP transport (live deploy) > tools/call subscribe_to_channel receives a broadcast from an external sender 4979ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  20:46:24
+   Duration  20.03s (transform 19ms, setup 4ms, collect 47ms, tests 19.81s, environment 0ms, prepare 34ms)
