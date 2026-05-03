@@ -29,6 +29,11 @@ bun run eval/runner.ts ci-full    # n=100 (~$2-3, 30 min)
 
 # Multi-model probe (default: claude-haiku-4-5):
 EVAL_TRIAGE_MODEL=claude-sonnet-4-6 bun run eval/runner.ts ci-full
+
+# Release loop (after a `release(vX.Y.Z): ...` PR merges to main):
+git tag vX.Y.Z && git push origin vX.Y.Z         # fires .github/workflows/publish.yml via OIDC
+gh run watch $(gh run list --workflow=publish.yml --limit 1 --json databaseId -q '.[0].databaseId')
+npm view supabase-realtime-skill@X.Y.Z version dist-tags   # verify publish landed
 ```
 
 Operator setup: [`references/edge-deployment.md`](references/edge-deployment.md). Requires Supabase Pro + a dedicated host project + a fine-grained PAT.
@@ -114,6 +119,10 @@ The `!` triggers on import — fails typecheck-driven imports, fails CI runs wit
 
 Don't mark an ADR `Accepted` until the operator explicitly decides. `Proposed` is the safe default for design choices the operator hasn't ruled on. The pre-registration loop's whole point is that outcomes (accept / partial / reject) come from evidence + operator judgment, not from drafting momentum.
 
+### npm tag judgment ≠ project milestone label
+
+ADRs sometimes label a milestone "vX.Y.Z ship surface" (project narrative). That label does NOT determine the npm tag. Cut the npm tag against what the recon's fallback path actually specified — ADR-0016's recon explicitly said "v1.0.0 = both [smoke surface + manifest n=300] shipped within the same calendar week, otherwise the smoke PR is `0.3.0` and v1.0.0 stays unclaimed." When drafting a release PR, re-read the recon's tag-decision row before settling on a number; project narrative ≠ SemVer event.
+
 ### Branch + commit conventions
 
 Branch names use a functional prefix: `recon/<topic>`, `fix/<topic>`, `feat/<topic>`, `docs/<topic>`. **Don't** use `adr-NNNN-<topic>` — the ADR number lives in the commit/PR title, not the branch name.
@@ -178,6 +187,10 @@ The Supabase platform gateway returns 406 on `GET /functions/v1/mcp/health` if o
 ### Deno lock regen after `deno.json` changes
 
 When bumping any version in `supabase/functions/mcp/deno.json`: `cd supabase/functions/mcp && rm -f deno.lock && deno cache --reload index.ts && deno check index.ts`. Without this, `deno.lock` and the deployed bundle can drift (source-tree-vs-deployed alignment was the ADR-0015 anomaly).
+
+### Release-PR vs Edge-redeploy-PR are always two separate PRs
+
+The `npm:supabase-realtime-skill@^X.Y.Z/server` import range in `supabase/functions/mcp/deno.json` cannot be bumped in the same PR as the `package.json` version bump — the new npm version doesn't exist until the tag fires the publish workflow, so `deno cache --reload` would fail at lock-regen time. Pattern: (1) `feat/vX.Y.Z-tag` PR bumps `package.json` + CHANGELOG only; (2) merge → tag → publish; (3) `feat/edge-redeploy-vX.Y.Z` PR bumps `deno.json` + regens `deno.lock`; (4) operator runs `supabase functions deploy` after merge; (5) commit smoke receipt to `logs/smoke-edge-deploy/`. The v0.3.0 ship loop (PRs #23 / #24 / #25) is the reference shape.
 
 ## Where to put new info
 
