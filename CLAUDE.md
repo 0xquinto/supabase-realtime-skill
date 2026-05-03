@@ -4,7 +4,9 @@ Agent Skill paired with an MCP server for Supabase Realtime/CDC (Postgres-Change
 
 ## Purpose (read first)
 
-The artifact is a **portfolio piece for the Supabase AI Tooling Engineer pivot**. The audience is the supabase/agent-skills maintainers + the JD's hiring panel. The signals are: (1) a real Skill+MCP composition, (2) opinionated patterns shipped with worked examples, (3) eval discipline that gates merges, (4) judgment about what to defer (Presence) and why.
+The artifact is a **portfolio piece for the Supabase AI Tooling Engineer pivot**. The audience is the supabase/agent-skills maintainers + the JD's hiring panel. What's actually demonstrable: (1) a working bounded-subscription primitive on Supabase Realtime + Broadcast packaged as an MCP server on Edge Function, (2) substrate gotchas pre-wired in the wrapper (the canonical chain: JWT-`setAuth` propagation, `private:true` opt-in, GRANT+RLS for anon-JWT, warm-up window), (3) pre-registered eval thresholds with smoke receipts as the audit trail for those choices, (4) judgment about what to defer (Presence, manifest n=300, upstream-as-PR) with reasoning filed as ADRs.
+
+Items (1) + (2) are the value. Items (3) + (4) are the audit trail that lets a reader trust the value. **Don't conflate the two** — see § Anti-patterns ("process-as-moat", "own-debugging-as-research") for the framings that drift back here without guardrails.
 
 The system under test in the eval harness here is **the `supabase-realtime-skill` artifact itself**, not a model. The 4 metrics in `manifest.json` measure whether the bundle's bounded primitive + worked example hold up under regression. Multi-model coverage is sanity-probe, not headline.
 
@@ -219,6 +221,8 @@ The `npm:supabase-realtime-skill@^X.Y.Z/server` import range in `supabase/functi
 - Heavy frameworks (we're plain TS + Bun + raw SDKs + zod)
 - **Recommending a change without a falsifiable predicted effect** (`manifest.json` is the worked answer here)
 - **Phenomenon-proxy gap** ([`playbook/research/construct-validity.md`](playbook/research/construct-validity.md) Target 4): the eval must measure the phenomenon, not a proxy for it. The 4 metrics here measure substrate (3) + composition (1); they don't claim to measure "agent quality" abstractly.
+- **Process-as-moat (the "discipline-as-headline" drift).** Pitching discipline / pre-registration / ADR backbone as the value-prop. Process produces evidence; it isn't itself the value. **Test:** swap "discipline" for "process" — if the sentence still reads as value-prop, it's drift. Trips: *"the discipline backbone is the differentiator."* Doesn't: *"the bounded primitive handles substrate gotchas correctly."* Provenance: 2026-05-03 self-review (PR #27 + CLAUDE.md § Purpose history).
+- **Own-debugging-as-research (the "we found N silent failures" drift).** Pitching bugs we hit in our own composition as findings. Substrate behavior the docs name (even scattered) was already there; we ran into it. **Test:** if docs name the behavior, it's a tool we built (not a finding). If we measured a distribution / contract / boundary the docs don't quantify, that's a methodology contribution — separate category, call it that. Trips: *"we found 4 silent failures."* Doesn't: *"a wrapper pre-wires the substrate gotchas."* Methodology-contribution shape (also doesn't trip): *"n=20 p99 distribution of the warm-up window — measured, not discovered."* Provenance: 3 of 4 ADR-0011 / 0013 / T7 / 0016 "findings" are documented gotchas; the warm-up p99 measurement and silent-filtering contract are methodology contributions.
 
 ## Status
 

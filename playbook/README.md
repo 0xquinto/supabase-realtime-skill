@@ -2,7 +2,7 @@
 
 These files were copied verbatim from `supabase-mcp-evals` at SHA `ddacb77` (2026-04-30):
 
-- `PLAYBOOK.md` — methodology synthesized from the LLM evals YouTube playlist (the discipline backbone for this repo's eval methodology)
+- `PLAYBOOK.md` — methodology synthesized from the LLM evals YouTube playlist; this repo's eval choices cite from it (audit trail, not a value-prop on its own — see CLAUDE.md § Anti-patterns "process-as-moat")
 - `PLAYLIST.md` — index of source videos
 - `research/*.md` — 7 topic files closing identified playbook gaps:
   - `agent-eagerness.md`
