@@ -17,7 +17,7 @@ bun install
 cp .env.example .env                 # populate ANTHROPIC_API_KEY, EVAL_SUPABASE_PAT, EVAL_HOST_PROJECT_REF
 
 bun run test:fast                    # 50 offline tests (~1s)
-bun run test:smoke                   # 8 online smoke tests against real branches (~3-6 min, requires env)
+bun run test:smoke                   # 13 online smoke tests across 8 files (~3-6 min, requires env)
 bun run typecheck                    # tsc --noEmit
 bun run lint                         # biome check
 bun run lint:fix                     # biome check --write
@@ -58,7 +58,7 @@ Operator setup: [`references/edge-deployment.md`](references/edge-deployment.md)
 | `docs/recon/` | pre-ADR research docs (`YYYY-MM-DD-<topic>-recon.md`); produces evidence the ADR commits on |
 | `docs/spike-findings.md` | T7 5s warm-up + T8 .ts-extension reshape + Phase 1 gate-PASSED trail |
 | `docs/writeup.md` | the headline narrative |
-| `docs/ship-status.md` | what's done + 5 follow-ups awaiting operator action |
+| `docs/ship-status.md` | v0.1.0-era ship snapshot (historical). Current operator follow-ups live in CLAUDE.md § Status. |
 
 ## Non-obvious conventions (the load-bearing ones)
 
@@ -183,12 +183,11 @@ When bumping any version in `supabase/functions/mcp/deno.json`: `cd supabase/fun
 
 | Kind | Lives in |
 |---|---|
-| New design (v0.2 etc.) | `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` |
-| Implementation plan for a spec | `docs/superpowers/plans/YYYY-MM-DD-<topic>.md` |
+| Pre-ADR research (closing a gap before deciding) | `docs/recon/YYYY-MM-DD-<topic>-recon.md` |
+| Architecture decision (commits the design + falsifiable predicted effect) | `docs/decisions/NNNN-<slug>.md` |
 | Operational finding from a spike | append to `docs/spike-findings.md` |
 | Skill consumer reference | `references/<topic>.md` (linked from `SKILL.md`) |
 | External research closing a playbook gap | `playbook/research/<topic>.md` (mirror supabase-mcp-evals' pre-registered targets pattern) |
-| Architecture decision | `docs/decisions/NNNN-<slug>.md` (see directory for filed ADRs) |
 | Engineering tactics | commit messages |
 
 ## Anti-patterns (from `playbook/PLAYBOOK.md` § 8)
