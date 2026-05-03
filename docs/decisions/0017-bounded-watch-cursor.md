@@ -129,7 +129,7 @@ Total: ~2 days for the cursor layer. Action contract (the next ADR after 0017) a
 
 ## Status discipline
 
-Filed **Proposed**. Promotion to `Accepted` happens only after: (a) the in-memory impl PR produces a 25/25 PASS receipt, and (b) the operator (Diego) has reviewed both this ADR and the impl PR. Per CLAUDE.md § "ADR status discipline" — no momentum-based acceptance.
+Filed **Proposed**. The in-memory FAIL→PASS pair (24/24 RED at commit `a06b49b`, 24/24 GREEN at commit `831d5f3`, both in this PR) validates the unit-level state-machine logic. Promotion to `Accepted` happens only after: (a) the next PR's Postgres adapter produces a corresponding GREEN restart-smoke receipt against a real Pro branch, and (b) the operator (Diego) has reviewed both this ADR and the substrate-level evidence. Per CLAUDE.md § "ADR status discipline" — no momentum-based acceptance.
 
 ## Back-refs
 

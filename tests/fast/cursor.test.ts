@@ -1,17 +1,16 @@
 // tests/fast/cursor.test.ts
 //
-// RED test scaffold for ADR-0017 (Proposed). Asserts the cursor state-machine
-// invariants documented in docs/decisions/0017-bounded-watch-cursor.md.
+// State-machine tests for ADR-0017's CursorStore. Asserts the invariants
+// documented in docs/decisions/0017-bounded-watch-cursor.md.
 //
-// Until the impl lands (next PR), the stub at src/server/cursor.ts throws on
-// every method. Every test in this file SHOULD FAIL with that error — that's
-// the deliberate RED state of the FAIL→fix→PASS discipline (per CLAUDE.md).
-// When the impl ships, no tests in this file change; they all turn green.
-//
-// State machine recap:
-//   idle → leased → committed | dlq
-// Delivery: at-least-once with idempotency-key dedup.
-// Cursor advance is ATOMIC with status flip to committed (RisingWave#25071).
+// FAIL→PASS history (single-PR shape per ADR-0013):
+//   - commit a06b49b shipped this file + a stub impl that threw on every
+//     method. Captured 24/24 RED.
+//   - commit 831d5f3 shipped makeInMemoryCursorStore impl with zero test
+//     changes. Captured 24/24 GREEN.
+// State machine: idle → leased → committed | dlq.
+// Delivery: at-least-once with idempotency-key dedup. Cursor advance is
+// ATOMIC with status flip to committed (RisingWave#25071 lesson).
 
 import { describe, expect, it } from "vitest";
 import { type CursorStore, makeInMemoryCursorStore } from "../../src/server/cursor.ts";
@@ -185,6 +184,15 @@ describe("CursorStore — commit", () => {
     await store.commit(W1, H1, advance("pk-001", "k-001"));
     const row = await store.read(W1);
     expect(row?.attempts).toBe(0);
+  });
+
+  it("returns dlq_terminal when watcher is in dlq state", async () => {
+    const store = freshStore();
+    await store.acquire(W1, H1, 30_000);
+    await store.release(W1, H1, "dlq", "max_attempts");
+    const r = await store.commit(W1, H1, advance("pk-001", "k-001"));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe("dlq_terminal");
   });
 });
 

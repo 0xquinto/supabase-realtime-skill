@@ -2,16 +2,14 @@
 //
 // Persistent cursor for boundedWatch — design per ADR-0017 (Proposed).
 //
-// IMPORTANT — this module ships the RED test scaffold for the FAIL→PASS
-// discipline (per CLAUDE.md § "FAIL→fix→PASS smoke-test discipline").
-// The state machine + types are committed; the in-memory impl is a stub
-// that throws so the test suite at tests/fast/cursor.test.ts fails
-// meaningfully on every assertion. Impl lands in the next PR.
-//
 // State machine: idle → leased → committed | dlq.
 // Delivery: at-least-once with idempotency-key dedup (Debezium pattern).
 // Cursor advance is ATOMIC with status flip to committed — no time-based
 // commit, ever (RisingWave#25071 lesson).
+//
+// Two CursorStore implementations are planned:
+// - makeInMemoryCursorStore (this file): for fast tests + ephemeral flows.
+// - makePostgresCursorStore (next PR): production durable store + restart smoke.
 
 export type CursorStatus = "idle" | "leased" | "committed" | "dlq";
 
@@ -207,6 +205,9 @@ export function makeInMemoryCursorStore(config: InMemoryCursorStoreConfig = {}):
 
     async commit(watcher_id, lease_holder, advance) {
       const existing = rows.get(watcher_id);
+      if (existing?.status === "dlq") {
+        return { ok: false, deduped: false, reason: "dlq_terminal" };
+      }
       if (!existing || existing.lease_holder === null) {
         return { ok: false, deduped: false, reason: "no_lease" };
       }
