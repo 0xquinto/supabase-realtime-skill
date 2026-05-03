@@ -6,6 +6,32 @@ follows [SemVer](https://semver.org/) on the npm package surface
 (`./` and `./server` exports). Substrate-correctness ADRs that don't
 change the published surface ship within the same minor.
 
+## [1.0.0] — 2026-05-03
+
+The "v1.0 ship surface" release. Closes the four sub-items ADR-0015 deferred:
+end-to-end smoke coverage of `watch_table` + `subscribe_to_channel` against the
+deployed Edge Function, and an MCP SDK floor regression gate. No consumer-API
+changes from `0.2.0` — the major bump signals "all five tools live-verified
+end-to-end and the published surface is stable enough to commit to."
+
+### Added
+
+- **`watch_table` E2E smoke** (`tests/smoke/edge-deploy.smoke.test.ts`) — applies the GRANT + RLS chain on a freshly-published table, dispatches `tools/call watch_table`, fires multi-INSERT schedule (+100ms / +5s / +10s), asserts populated `event.new` payload. 12s wall budget (1.5× the spike's 5.3s p99). ADR-0016.
+- **`subscribe_to_channel` E2E smoke** — opens a broadcast channel via the deployed function, an external `createClient` instance fires three broadcasts (+500ms / +3s / +6s), asserts the receiver got at least one with `payload.from === "external-sender"`. 10s wall budget. ADR-0016.
+- **MCP SDK floor regression gate** (`tests/fast/sdk-floor.test.ts`) — reads the resolved `@modelcontextprotocol/sdk` version, fails the fast-test gate if it drops below `1.27.1` (the version that landed [PR #1580](https://github.com/modelcontextprotocol/typescript-sdk/pull/1580) — the `WebStandardStreamableHTTPServerTransport.onerror` fix). Mechanical but load-bearing: existing smokes don't deliberately fault the transport, so without this a regex regression in `package.json` could silently re-enable error-swallowing. ADR-0016.
+- **Edge warm-up distribution spike** (`eval/spike-edge-warmup.ts`) — 20-trial measurement of the cold-start handshake on the deployed function. Drives the smoke wall-budget choice and pinned the GRANT + RLS chain root cause. JSON logs committed under `logs/spike-edge-warmup/`. ADR-0016.
+- **Edge payload diagnostic probe** (`eval/probe-edge-payload.ts`) — five-variant matrix (auth × GRANT × RLS) that pinned why anon-JWT subscriptions deliver `new: null/empty` without the chain. Trail-of-evidence; not a regression gate.
+- **Smoke receipt provenance** (`logs/smoke-edge-deploy/`) — committed vitest output for ADR-promotion smoke runs (mirrors the spike-latency + spike-edge-warmup pattern). The receipts cited in ADR-0016 are no longer ephemeral.
+
+### Changed
+
+- **`@modelcontextprotocol/sdk` floor `^1.0.0` → `^1.27.1`** in `package.json` and `supabase/functions/mcp/deno.json` (landed in `0.2.x` cycle via PR #18 / ADR-0016). 1.27.1 carries the WebStandardStreamableHTTPServerTransport `onerror` fix (PR #1580). Without this, transport-layer errors in the deployed function get silently swallowed instead of bubbling to the JSON-RPC error envelope.
+- **`tests/smoke/edge-deploy.smoke.test.ts`** — `watch_table` smoke now logs `delivered_n=N` alongside wall time so an operator scanning CI output can spot warm-up window drift (if `n=2` becomes habitual instead of `n=0`/`n=1`, the budget needs a fresh spike).
+
+### Operator follow-up
+
+- **Edge Function redeploy after this tag publishes.** `supabase/functions/mcp/deno.json` still pins `npm:supabase-realtime-skill@^0.2.0/server` — that's deliberate (the version doesn't exist on npm until this tag triggers the publish workflow). Post-publish, bump the `deno.json` import range to `^1.0.0`, regen `deno.lock` (`cd supabase/functions/mcp && rm -f deno.lock && deno cache --reload index.ts`), and run `SUPABASE_ACCESS_TOKEN=$EVAL_SUPABASE_PAT supabase functions deploy --no-verify-jwt mcp --project-ref $EVAL_HOST_PROJECT_REF`. Source-tree-vs-deployed alignment stays intact (ADR-0015) — the function continues running `0.2.x` until the redeploy lands.
+
 ## [0.2.0] — 2026-05-02
 
 The "worked example ships" release. Bundles the demo migration that
@@ -45,6 +71,7 @@ Patch. Internal cleanup; no consumer-visible changes.
 
 Initial release. Five MCP tools (`watch_table`, `broadcast_to_channel`, `subscribe_to_channel`, `list_channels`, `describe_table_changes`) + `boundedQueueDrain` deterministic module + bundled eval harness (n=100 ci-full at 99/100 action_correctness on Sonnet 4.6). Edge Function deployed via OIDC Trusted Publisher. ADRs 0001–0010.
 
+[1.0.0]: https://github.com/0xquinto/supabase-realtime-skill/releases/tag/v1.0.0
 [0.2.0]: https://github.com/0xquinto/supabase-realtime-skill/releases/tag/v0.2.0
 [0.1.1]: https://github.com/0xquinto/supabase-realtime-skill/releases/tag/v0.1.1
 [0.1.0]: https://github.com/0xquinto/supabase-realtime-skill/releases/tag/v0.1.0
