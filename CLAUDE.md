@@ -201,18 +201,20 @@ The `npm:supabase-realtime-skill@^X.Y.Z/server` import range in `supabase/functi
 
 ### Pre-PR review (pr-review-toolkit plugin)
 
-Toolkit at `~/.claude/plugins/cache/claude-plugins-official/pr-review-toolkit/` — 6 agents + `/pr-review-toolkit:review-pr [aspects]` slash command. **Default for any non-trivial code PR**: invoke `pr-review-toolkit:code-reviewer` against the staged diff before opening the PR. Iterate fixes in the same branch (one commit per round). PR #32 evidence: one code-reviewer pass found 9 issues — 2 critical silent-failure modes (release leak in commit-throw path, swallowed commit-fail return) that all 11 fast tests passed around. Fixed in commit 73cd5a2.
+Toolkit installed under `~/.claude/plugins/cache/claude-plugins-official/pr-review-toolkit/` — 6 agents + `/pr-review-toolkit:review-pr [aspects]` slash command. **Default for any code PR ≥20 LOC**: invoke `pr-review-toolkit:code-reviewer` against the staged diff before opening the PR. Iterate fixes in the same branch (one commit per round). PR #32 evidence: one code-reviewer pass surfaced 2 critical silent-failure modes (release leak in commit-throw path, swallowed commit-fail return) that all 11 fast tests passed around. Fixed in commit 73cd5a2.
 
 **Targeted adjuncts (invoke alongside code-reviewer when applicable):**
-- `silent-failure-hunter` — when the diff adds try/catch, fallback logic, or any error-suppression shape.
+- `silent-failure-hunter` — when the diff adds try/catch, fallback logic, or any error-suppression shape (deeper specialization than code-reviewer's general remit).
 - `type-design-analyzer` — when introducing new exported types (cursor / config / contract shapes).
 - `pr-test-analyzer` — when smoke or fast tests are net-new (not just modified).
-- `comment-analyzer` — when adding heavy docstrings, ADR-linked inline comments, or method docs.
+- `comment-analyzer` — when the PR adds new public API surface with docstrings, OR when the doc surface is itself the point (CLAUDE.md edits, ADR § amendments, references/* additions). Don't trigger on every ADR-anchored inline comment — most PRs in this repo have those.
 - `code-simplifier` — only after review iteration is done. Use sparingly (drifts toward refactoring beyond task scope).
 
-**When NOT to invoke:** doc-only PRs (CLAUDE.md, ADR text, handoff, recon), tiny diffs (<20 LOC single-file), PRs where the issue is already known with a fix in flight. The toolkit's marginal value drops fast on small surface area; don't burn a turn confirming what's obvious.
+**When NOT to invoke:** doc-only PRs (CLAUDE.md, ADR text, handoff, recon) UNLESS the doc itself is the deliverable, in which case `comment-analyzer` is the targeted call. PRs <20 LOC. PRs where the issue is already known with a fix in flight. The toolkit's marginal value drops fast on small surface area; don't burn a turn confirming what's obvious.
 
-**Comprehensive sweep:** `/pr-review-toolkit:review-pr` runs all applicable aspects against `git diff` in one shot — useful for the final pre-merge pass on a multi-file PR. Filter for confidence ≥80 (the agents' default threshold) so noise stays low.
+**Confidence threshold.** Only `code-reviewer` documents a confidence-scoring scheme (≥80 reported by default). The other 5 agents emit findings without numeric scores — read each finding and judge in-context.
+
+**Comprehensive sweep alternative.** `/pr-review-toolkit:review-pr` is the one-shot for multi-file PRs where the targeted-adjunct decision tree is too much overhead. Pick one path or the other per PR — don't sweep AND list-pick on the same diff.
 
 ## Where to put new info
 
