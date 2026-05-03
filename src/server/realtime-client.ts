@@ -17,6 +17,7 @@ import {
   createClient,
 } from "@supabase/supabase-js";
 import type { WatchTableInput, WatchTableOutput } from "../types/schemas.ts";
+import type { CursorStore } from "./cursor.ts";
 
 export interface ChangeEvent {
   event: "INSERT" | "UPDATE" | "DELETE";
@@ -35,8 +36,57 @@ export interface RealtimeAdapter {
   unsubscribe(): Promise<void>;
 }
 
+/**
+ * Optional persistent-cursor wiring for boundedWatch (ADR-0017 § 4 +
+ * batch-shape integration amendment in this same ADR's body). When supplied:
+ * - Before subscribe: acquire a lease on `watcher_id`. If the lease is
+ *   busy (different holder, unexpired) or the cursor is in `dlq`, throws
+ *   `CURSOR_BUSY` / `CURSOR_DLQ` (caught by handleWatchTable upstream).
+ * - During event collection: events whose extracted PK is ≤ the cursor's
+ *   `last_processed_pk` are filtered out (defensive against substrate
+ *   replay during reconnect).
+ * - On exit: commit cursor with the highest-PK event seen this batch +
+ *   release lease to `idle`. On subscribe/event errors: release `dlq`.
+ *
+ * NOT a per-event commit — that semantic requires the action contract
+ * layer (separate ADR after 0017). Integration here is batch-shape:
+ * cursor advances at function return, not per event.
+ */
+export interface BoundedWatchCursorConfig {
+  store: CursorStore;
+  watcher_id: string;
+  /** Operator-chosen unique identifier for THIS isolate. */
+  lease_holder: string;
+  /** Default 30_000 ms. */
+  lease_ttl_ms?: number;
+  /**
+   * Extracts the monotonic PK from an event for cursor advancement.
+   * Operator owns serialization (ULID, ISO timestamp, padded int) — must
+   * sort lexicographically.
+   */
+  pkExtractor: (event: ChangeEvent) => string;
+  /**
+   * Optional: extracts an idempotency key for dedup of replay events.
+   * Defaults to pkExtractor (PK doubles as dedup key for non-replayable
+   * Postgres-Changes events).
+   */
+  idempotencyExtractor?: (event: ChangeEvent) => string;
+}
+
 export interface BoundedWatchInput extends WatchTableInput {
   adapter: RealtimeAdapter;
+  /** See BoundedWatchCursorConfig. Omit for the v0.3.x stateless behavior. */
+  cursor?: BoundedWatchCursorConfig;
+}
+
+export class BoundedWatchCursorError extends Error {
+  constructor(
+    public readonly code: "CURSOR_BUSY" | "CURSOR_DLQ",
+    message: string,
+  ) {
+    super(message);
+    this.name = "BoundedWatchCursorError";
+  }
 }
 
 function matchesEvent(ev: ChangeEvent, predicate: WatchTableInput["predicate"]): boolean {
@@ -165,12 +215,37 @@ export async function boundedWatch(input: BoundedWatchInput): Promise<WatchTable
   const events: ChangeEvent[] = [];
   let resolveOnEvent: ((reason: "max_events") => void) | null = null;
 
+  // ---------------------------------------------------------------------
+  // Cursor lease acquisition (opt-in). Acquired BEFORE subscribe so a
+  // busy lease can short-circuit without burning a Realtime websocket.
+  // ---------------------------------------------------------------------
+  let cursorWatermark = ""; // PK threshold for the substrate-replay filter
+  if (input.cursor) {
+    const { store, watcher_id, lease_holder } = input.cursor;
+    const lease_ttl_ms = input.cursor.lease_ttl_ms ?? 30_000;
+    const acquired = await store.acquire(watcher_id, lease_holder, lease_ttl_ms);
+    if (!acquired.acquired) {
+      const reason = acquired.row.status === "dlq" ? "CURSOR_DLQ" : "CURSOR_BUSY";
+      throw new BoundedWatchCursorError(
+        reason,
+        `cursor ${watcher_id} is ${reason === "CURSOR_DLQ" ? "in dlq (terminal)" : `held by ${acquired.row.lease_holder}`}`,
+      );
+    }
+    cursorWatermark = acquired.row.last_processed_pk;
+  }
+
   const eventArrived = new Promise<"max_events">((resolve) => {
     resolveOnEvent = resolve;
   });
 
   const onEvent = (ev: ChangeEvent) => {
     if (!matchesEvent(ev, input.predicate)) return;
+    // Cursor watermark filter: skip events whose PK is <= the cursor's
+    // last_processed_pk (defensive against substrate replay on reconnect).
+    if (input.cursor && cursorWatermark !== "") {
+      const pk = input.cursor.pkExtractor(ev);
+      if (pk <= cursorWatermark) return;
+    }
     // Hard cap: max_events is the max events stored, regardless of how the
     // adapter delivers them. Without this guard, a synchronous burst (or a
     // websocket frame carrying multiple changes) overflows the cap because
@@ -183,7 +258,20 @@ export async function boundedWatch(input: BoundedWatchInput): Promise<WatchTable
     }
   };
 
-  await input.adapter.subscribe({ table: input.table, onEvent });
+  // Subscribe inside a try/catch so any failure releases the lease to dlq
+  // (release(idle) on success path; release(dlq) on error path).
+  try {
+    await input.adapter.subscribe({ table: input.table, onEvent });
+  } catch (err) {
+    if (input.cursor) {
+      await input.cursor.store
+        .release(input.cursor.watcher_id, input.cursor.lease_holder, "dlq", "subscribe_failed")
+        .catch(() => {
+          /* best-effort release; caller surfaces the original subscribe error */
+        });
+    }
+    throw err;
+  }
 
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -191,6 +279,33 @@ export async function boundedWatch(input: BoundedWatchInput): Promise<WatchTable
       timeoutId = setTimeout(() => resolve("timeout"), input.timeout_ms);
     });
     const closed_reason = await Promise.race([eventArrived, timeoutPromise]);
+
+    // Cursor commit + release on success path (after we know what we collected).
+    if (input.cursor && events.length > 0) {
+      const cursor = input.cursor;
+      // Pick the lexicographically-highest PK we saw this batch.
+      let highestPk = "";
+      let highestEvent: ChangeEvent | null = null;
+      for (const ev of events) {
+        const pk = cursor.pkExtractor(ev);
+        if (pk > highestPk) {
+          highestPk = pk;
+          highestEvent = ev;
+        }
+      }
+      if (highestEvent) {
+        const idempExtract = cursor.idempotencyExtractor ?? cursor.pkExtractor;
+        await cursor.store.commit(cursor.watcher_id, cursor.lease_holder, {
+          last_processed_pk: highestPk,
+          last_processed_at: highestEvent.commit_timestamp,
+          idempotency_key: idempExtract(highestEvent),
+        });
+      }
+    }
+    if (input.cursor) {
+      await input.cursor.store.release(input.cursor.watcher_id, input.cursor.lease_holder, "idle");
+    }
+
     return { events, closed_reason };
   } finally {
     if (timeoutId !== undefined) clearTimeout(timeoutId);

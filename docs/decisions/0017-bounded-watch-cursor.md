@@ -81,14 +81,39 @@ The fast test suite (this PR's scaffold) targets the in-memory implementation. T
 
 ### 4. Migration shape (cursor → SDK boundary)
 
-`boundedWatch` gains an optional `cursor?: { store: CursorStore; watcher_id: string; lease_ttl_ms?: number }` parameter. When omitted, behavior is unchanged (current stateless mode). When supplied:
+`boundedWatch` gains an optional `cursor?: BoundedWatchCursorConfig` parameter where:
+```ts
+interface BoundedWatchCursorConfig {
+  store: CursorStore;
+  watcher_id: string;
+  lease_holder: string;          // unique per isolate; caller supplies
+  lease_ttl_ms?: number;         // default 30_000
+  pkExtractor: (event: ChangeEvent) => string;
+  idempotencyExtractor?: (event: ChangeEvent) => string;  // defaults to pkExtractor
+}
+```
 
-- Before subscribe: `acquire` lease; if not acquired, throw `ToolError('CURSOR_BUSY')`.
-- During each event: heartbeat every `heartbeat_interval_ms` (default `lease_ttl_ms / 3`).
-- Per event delivered to user action: invoke action; on success, `commit(advance)`; on failure, `attempts++`; if `attempts >= max_attempts`, `release('dlq', reason)`.
-- On graceful shutdown / `unsubscribe`: `release('idle')`.
+When omitted, behavior is unchanged (current stateless mode). When supplied (**batch-shape integration as shipped — see § "Why batch-shape, not per-event" below**):
+
+- Before subscribe: `acquire` lease; if busy or `dlq`, throw `BoundedWatchCursorError({ code: "CURSOR_BUSY" | "CURSOR_DLQ" })`.
+- During event collection: events whose `pkExtractor(ev) <= cursor.last_processed_pk` are filtered out (defensive against substrate replay during reconnect).
+- On `subscribe` failure: `release('dlq', "subscribe_failed")` then re-throw.
+- On graceful exit (max_events / timeout): if events were collected, find the lexicographically-highest PK among them, `commit({ last_processed_pk, last_processed_at, idempotency_key })`. Then `release('idle')`. If no events, no commit (cursor unchanged); `release('idle')`.
 
 Backward compat: callers that don't pass `cursor` are unaffected. v0.3.x bytes continue to work as today.
+
+### 5. Why batch-shape, not per-event (amendment 2026-05-03)
+
+The original migration shape above mentioned "per-event commit" semantics: invoke a user action callback per event, commit on success, retry / DLQ on failure. **That requires a user action callback, which `boundedWatch` does not currently have** — `boundedWatch` is a batch collector ("give me up to N events in T seconds, return the batch"). Per-event semantics presuppose the action contract layer (a separate ADR after 0017).
+
+This PR ships **batch-shape integration**: cursor advances at the end of `boundedWatch`'s call (not per event). Semantics:
+- Restart-safe at the batch boundary: caller invokes `boundedWatch({ cursor })` repeatedly; each call resumes where the previous one left off (skipping any substrate-replayed events).
+- At-most-once *delivery* to the caller (caller's batch is what was committed); at-least-seen *advance* (cursor records the high-water mark of what was returned).
+- Lease coordination: prevents two isolates running the same `watcher_id` from racing the same cursor row.
+
+The per-event commit shape (with the action contract) lands in a follow-up ADR. The cursor row schema + state machine + persistence contract are unchanged between batch-shape and per-event-shape; the call-site integration is the only thing that differs.
+
+Operators who want per-event commit semantics today can call `boundedWatch({ cursor })` with `max_events: 1` in a loop — each iteration commits the one event seen. That's the forward-compatible shim until the action contract ships.
 
 ## Predicted effect
 
