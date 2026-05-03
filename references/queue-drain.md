@@ -6,7 +6,7 @@ Promoted from the [outbox-forwarder pattern](outbox-forwarder.md) per [ADR-0010]
 
 ## ⚠ Contract surface
 
-> **At-least-once.** Each row may be forwarded more than once if the broadcast succeeds but the ack callback fails. **Subscribers MUST be idempotent.** To upgrade to effectively-once, run a consumer-side inbox table (out of scope for `v0.2.0`).
+> **At-least-once.** Each row may be forwarded more than once if the broadcast succeeds but the ack callback fails. **Subscribers MUST be idempotent.** To upgrade to effectively-once, run a consumer-side inbox table (out of scope for `v0.3.0`).
 
 > **Per-aggregate ordering only.** Realtime broadcast is fire-and-forget. Broadcasts to different channels have no relative ordering; broadcasts to the same channel arrive in insert order. If you need cross-destination ordering, you need a per-destination FIFO queue — that's a different module.
 
