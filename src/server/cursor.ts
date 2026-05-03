@@ -270,7 +270,11 @@ export function makeInMemoryCursorStore(config: InMemoryCursorStoreConfig = {}):
 // avoids a hard `import postgres` in the server bundle (postgres-js is a smoke-
 // test-side dependency, not an Edge runtime one). Operators who want this
 // adapter will already have postgres-js available in their stack.
-interface PgSql {
+//
+// Split into Base (used inside transactions, no nested begin) + outer (with
+// begin) so the type lines up with postgres-js' actual TransactionSql shape.
+
+interface PgSqlBase {
   // Tagged template — postgres-js spec returns rows as a Promise-like array.
   // The `unknown` row type forces operators to validate at the callsite.
   // biome-ignore lint/suspicious/noExplicitAny: postgres-js' tag returns a thenable that resolves to row arrays
@@ -278,8 +282,13 @@ interface PgSql {
   // Identifier escaping helper: sql(tableName) interpolates as a quoted identifier.
   // biome-ignore lint/suspicious/noExplicitAny: postgres-js' identifier helper accepts strings and returns an opaque marker
   (value: string): any;
-  // Transactional helper. The callback receives a transaction-bound sql instance.
-  begin<T>(callback: (tx: PgSql) => Promise<T>): Promise<T>;
+}
+
+interface PgSql extends PgSqlBase {
+  // Transactional helper. The callback receives a transaction-bound sql
+  // instance (PgSqlBase — no nested begin, matching postgres-js' actual
+  // TransactionSql signature).
+  begin<T>(callback: (tx: PgSqlBase) => Promise<T>): Promise<T>;
 }
 
 export interface PostgresCursorStoreConfig {

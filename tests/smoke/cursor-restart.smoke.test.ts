@@ -1,14 +1,19 @@
 // tests/smoke/cursor-restart.smoke.test.ts
 //
-// Substrate-level FAIL→PASS pair for ADR-0017's makePostgresCursorStore.
-// Validates that the cursor state survives an "isolate restart" (modeled as
+// Substrate-level GREEN test for ADR-0017's makePostgresCursorStore.
+// (The unit-level FAIL→PASS pair was captured in PR #30 against
+// makeInMemoryCursorStore; this smoke is GREEN-only at the substrate
+// layer — no RED state was authored here, and claiming "FAIL→PASS
+// pair" for this file would be discipline-as-headline drift.)
+//
+// Validates that cursor state survives an "isolate restart" (modeled as
 // a lease holder change after lease expiry) against real Postgres.
 //
 // Requires EVAL_HOST_DB_URL (host project's pooler URL). Skips cleanly when
 // absent. The host project's `public` schema is empty by default (per
 // CLAUDE.md); the smoke creates and drops its own temp cursor table inline.
 //
-// Cost: ~3-4s wall (mostly the 1.5s sleep waiting for lease expiry).
+// Cost: ~10-11s wall (two 1.5s sleeps for lease expiry + ~9 transactions).
 
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -32,8 +37,7 @@ function advance(pk: string, key: string) {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-// biome-ignore lint/suspicious/noExplicitAny: postgres-js Sql is structurally compatible with our PgSql interface
-let sql: any;
+let sql: ReturnType<typeof postgres>;
 let store: CursorStore;
 
 describe.skipIf(!SHOULD_RUN)("Postgres CursorStore — restart smoke (ADR-0017)", () => {

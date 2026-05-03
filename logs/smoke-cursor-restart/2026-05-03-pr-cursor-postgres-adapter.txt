@@ -1,4 +1,9 @@
-# Substrate-level FAIL→PASS receipt for ADR-0017's makePostgresCursorStore.
+# Substrate-level GREEN receipt for ADR-0017's makePostgresCursorStore.
+# (The unit-level FAIL→PASS pair was captured in PR #30 against
+# makeInMemoryCursorStore — commit a06b49b 24/24 RED → 831d5f3 24/24
+# GREEN. This file is the GREEN-only substrate validation; no RED state
+# was authored at the substrate layer, and labeling this a "FAIL→PASS
+# pair" would be discipline-as-headline drift per CLAUDE.md anti-patterns.)
 #
 # Branch:           feat/cursor-postgres-adapter
 # Date:             2026-05-03
